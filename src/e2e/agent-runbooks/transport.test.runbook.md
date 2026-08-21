@@ -24,11 +24,13 @@ Verify **MCP discovery + environment detection** for the xberg wrapper (cases F1
 
 - Call `meta_search("xberg")`.
 - Inspect the returned xberg tools.
-- **PASS:** exactly **2** xberg tools are discoverable, and each exposes an **input schema**. The names follow **one** of two variants (never a mixed set):
-  - **Unprefixed:** `extract_bytes`, `extract_structured` → the **local** environment is active.
-  - **LiteLLM-prefixed:** `hugging_xberg-extract_bytes`, `hugging_xberg-extract_structured` → the **remote** environment is active.
-- **Record the variant as the active environment** (unprefixed → local, `hugging_xberg-*` → remote). All subsequent steps use the **bound tool** (the variant you discovered).
-- **FAIL signature:** **0** xberg tools discovered (dead connection → follow SKILL.md *dead-connection recovery*: run `./start.sh`, restart the opencode session, re-probe), **or** a count ≠ 2, **or** a mixed prefix/unprefix set, **or** a tool missing its input schema.
+- **opencode prefixes every MCP tool with the entry name** — xberg tools are never bare. Match on the entry-name prefix.
+- **PASS:** the **two** xberg extract tools (`extract_bytes` + `extract_structured`) are discoverable under the active entry's prefix, and each exposes an **input schema**:
+  - **Local** — `hugging-xberg-dev_extract_bytes`, `hugging-xberg-dev_extract_structured` → the **local** `hugging-xberg-dev` entry is active.
+  - **Remote** — xberg-extract tools through the remote `hugging-xberg` entry (`hugging-xberg_hugging_kreuzberg-*` as of 2026-08-21; confirm at Setup) → the **remote** `hugging-xberg` entry is active.
+- **Record the variant as the active environment** (local = `hugging-xberg-dev_*`, remote = `hugging-xberg_*` non-dev). All subsequent steps use the **bound tool** (the variant you discovered).
+- **FAIL signature:** **0** xberg extract tools discovered (dead connection → follow SKILL.md *dead-connection recovery*: run `./start.sh`, restart the opencode session, re-probe), **or** a tool missing its input schema.
+- **Note:** when **both** entries are `enabled: true`, `meta_search` returns both sets — the 2 local `hugging-xberg-dev_*` xberg extract tools plus the remote entry's tools (which can include non-xberg servers, e.g. paperless, routed through LiteLLM). Select the xberg **extract** tools for the active environment by their entry-name prefix; the presence of extra remote-server tools is expected and not a failure.
 
 #### Step 2 (F2): `initialize` (implicit)
 
@@ -50,5 +52,5 @@ Verify **MCP discovery + environment detection** for the xberg wrapper (cases F1
 
 | Case | PASS signature | Notes |
 |------|----------------|-------|
-| **F1** — Discovery + env detection | Exactly 2 xberg tools, each with an input schema, in ONE consistent variant | Records the bound variant → active environment (unprefixed = local, `hugging_xberg-*` = remote) |
+| **F1** — Discovery + env detection | The 2 xberg extract tools present under ONE active entry prefix, each with an input schema | Records the bound variant → active environment (`hugging-xberg-dev_*` = local, `hugging-xberg_*` non-dev = remote) |
 | **F2** — `initialize` (implicit) | Tools discoverable **and** probe `tools/call` succeeds OR returns a structured MCP tool error (not a connection/timeout failure) | Confirms the MCP handshake is established at the connection layer |

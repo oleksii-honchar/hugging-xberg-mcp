@@ -84,8 +84,9 @@ No auth headers (the local server is unauthenticated). This entry **coexists wit
 
 **Verification:** after (re)starting the opencode session, run `meta_search("xberg")`:
 
-- Unprefixed `extract_bytes` / `extract_structured` present → the local `hugging-xberg-dev` entry is active
-- `hugging_xberg-extract_bytes` / `hugging_xberg-extract_structured` present → the remote `hugging-xberg` entry is active
+- **opencode prefixes every MCP tool with the entry name** — so xberg tools are never "unprefixed". Match on the entry-name prefix:
+- `hugging-xberg-dev_extract_bytes` / `hugging-xberg-dev_extract_structured` present → the local `hugging-xberg-dev` entry is active
+- xberg-extract tools through the remote `hugging-xberg` entry (opencode prefix `hugging-xberg_` + LiteLLM upstream server `hugging_kreuzberg`) → the bound remote names are `hugging-xberg_hugging_kreuzberg-extract_bytes` / `hugging-xberg_hugging_kreuzberg-extract_structured` → the remote `hugging-xberg` entry is active
 
 ---
 
@@ -98,11 +99,13 @@ Runbooks never hardcode an environment; the agent binds at Setup and resolves pe
 | Stack | repo compose via `./start.sh` (localhost) | puma.lan compose (same stack on puma host) |
 | Endpoint | `http://localhost:3000/mcp` | `https://lite-llm.lan/mcp/hugging_xberg` |
 | opencode entry | `hugging-xberg-dev` | `hugging-xberg` |
-| `extract_bytes` | `meta_use("extract_bytes", …)` | `meta_use("hugging_xberg-extract_bytes", …)` |
-| `extract_structured` | `meta_use("extract_structured", …)` | `meta_use("hugging_xberg-extract_structured", …)` |
+| `extract_bytes` | `meta_use("hugging-xberg-dev_extract_bytes", …)` | `meta_use("hugging-xberg_hugging_kreuzberg-extract_bytes", …)`* |
+| `extract_structured` | `meta_use("hugging-xberg-dev_extract_structured", …)` | `meta_use("hugging-xberg_hugging_kreuzberg-extract_structured", …)`* |
 | Auth | none | Bearer `LITELLM_API_KEY` (env/`.env`, never hardcoded) |
-| **Detection signal** | unprefixed tool names present | `hugging_xberg-*` prefixed names present |
+| **Detection signal** | `hugging-xberg-dev_*` names present | `hugging-xberg_*` xberg-extract names (non-`-dev`) present |
 | **Logs to check** | `docker compose logs` (repo stack) | puma.lan LiteLLM / xberg logs |
+
+\* Remote xberg tool names = opencode entry prefix `hugging-xberg_` + the LiteLLM **upstream server** name. As of 2026-08-21 the remote upstream is still the legacy `hugging_kreuzberg` server, so remote tools are `hugging-xberg_hugging_kreuzberg-*`. Confirm the exact remote name with `meta_search("xberg")` at Setup (it changes if the LiteLLM upstream is renamed). Local names (`hugging-xberg-dev_*`) are verified stable.
 
 The agent runs `meta_search` at Setup, binds to whichever variant is registered, records the environment, and uses that binding for all steps.
 
@@ -117,8 +120,8 @@ The agent runs `meta_search` at Setup, binds to whichever variant is registered,
 **Objective:** Bind the xberg tool variant, record the active environment, verify stack and LLM reachability.
 
 1. **Bind tool variant:** run `meta_search("xberg")` — inspect which variant is registered:
-   - Unprefixed `extract_bytes` / `extract_structured` → **local**
-   - `hugging_xberg-extract_bytes` / `hugging_xberg-extract_structured` → **remote**
+   - `hugging-xberg-dev_extract_bytes` / `hugging-xberg-dev_extract_structured` (opencode entry-name prefix) → **local**
+   - xberg-extract tools through the remote `hugging-xberg` entry (`hugging-xberg_hugging_kreuzberg-*` as of 2026-08-21; confirm at Setup) → **remote**
 
    Record the environment. Use the bound tool name in every step.
 
@@ -241,7 +244,7 @@ Related knowledge lives in the repo vault — reference by name, never copy:
 
 | Anti-Pattern | Correction |
 |---|---|
-| Using unprefixed tool names on the remote (or prefixed on local) | LiteLLM prepends the server name to remote tool names: `hugging_xberg-*` (`.vault/memories/0003-litellm-tool-name-prefixing`). Bind via `meta_search` at Setup; never hardcode the variant. |
+| Using bare `extract_bytes` / assuming "unprefixed" local tools | **opencode always prefixes MCP tools with the entry name** — local xberg tools are `hugging-xberg-dev_*`, never bare. Remote stacks LiteLLM's upstream server prefix on top (currently `hugging-xberg_hugging_kreuzberg-*`) (`.vault/memories/0003-litellm-tool-name-prefixing`). Bind via `meta_search` at Setup and match the entry-name prefix; never hardcode the variant. |
 | Assuming server-side session state across calls | LiteLLM reinitializes the MCP session per operation (create transport → initialize → call → close); the server is stateless (`.vault/memories/0002-litellm-reinit-per-operation`). Never rely on state from a previous call. |
 | Sending corrupted or line-wrapped base64 | Corrupted base64 produces parse errors (422-style) (`.vault/memories/0006-base64-corruption-422-errors`). Use the portable helper: `b64() { base64 < "$1" | tr -d '\n'; }`. |
 | Expecting opencode to reconnect after the stack dies | opencode never retries dead MCP connections (`.vault/memories/0004-opencode-no-retry-mcp-connection`). Run `./start.sh` and **restart the opencode session**. |
@@ -266,7 +269,7 @@ Stop and ask when you encounter:
 
 - [ ] Confirmed this is an agent-runbook request (not "run npm tests" / "run smoke scripts")
 - [ ] Bound tool variant verified via `meta_search("xberg")`
-- [ ] Active environment detected and recorded (local unprefixed / remote `hugging_xberg-*`)
+- [ ] Active environment detected and recorded (local `hugging-xberg-dev_*` / remote `hugging-xberg_*` non-dev entry)
 - [ ] LLM probe run at Setup; status recorded
 - [ ] Every runbook step executed via MCP tools (no raw HTTP in runbooks)
 - [ ] Envelope assertions treat missing `errors` as `[]`; OCR assertions are shape-based

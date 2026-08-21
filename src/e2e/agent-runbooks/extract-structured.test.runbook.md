@@ -8,7 +8,7 @@
 
 Verify the **bound `extract_structured` tool** end-to-end (cases E1–E4): basic structured extraction from an image, structured extraction on a multi-page PDF, a nested/complex result shape, and the input-validation error path.
 
-> **Environment-agnostic:** steps reference the **bound tool** — the `extract_structured` variant discovered at Setup (unprefixed → local; `hugging_xberg-*` prefixed → remote). Never hardcode a variant.
+> **Environment-agnostic:** steps reference the **bound tool** — the `extract_structured` variant discovered at Setup (opencode prefixes by entry name: `hugging-xberg-dev_extract_structured` → local; remote `hugging-xberg` entry, LiteLLM-wrapped `hugging-xberg_hugging_kreuzberg-*` → remote). Never hardcode a variant.
 >
 > **Tool parameters (verified against `src/tools.js`):** `extract_structured` accepts **only `data`** (required) — there is **no schema/fields argument** in the tool signature. The extraction schema is **server-configured** (the `structured_extraction` config built by `xberg-client.js` from xberg config; default schema in `src/structured-schema.json` with `title`, `subtitle`, `metrics`). Steps therefore pass only `data` and assert on the **shape** of the server-returned structured result, never on exact values.
 >
