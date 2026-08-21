@@ -31,6 +31,11 @@ unwrap_sse() {
   fi
 }
 
+# ── Portable base64 ─────────────────────────────────────────────────────────
+# Stdin form `base64 < file` works on both macOS BSD and GNU Linux;
+# `tr -d '\n'` removes line wrapping (replaces the GNU-only -w0 flag).
+b64() { base64 < "$1" | tr -d '\n'; }
+
 pass() { echo -e "  ${GREEN}PASS${NC}: $1"; ((PASSED++)); }
 fail() { echo -e "  ${RED}FAIL${NC}: $1"; ((FAILED++)); }
 cyan_info() { echo -e "  ${CYAN}---$1${NC}"; }
@@ -53,6 +58,36 @@ fi
 
 echo ""
 echo "=== Remote MCP test: $MCP_URL ==="
+
+# ── Check: remote Bearer auth (401) ────────────────────────────────────────
+# A request with a WRONG Bearer token must be rejected (401/403, or
+# LiteLLM's wrapped auth error) and must NOT return any tools.
+# The correct-key path is covered by the existing checks below.
+echo ""
+echo "=== Check: remote Bearer auth (401) ==="
+cyan_info "Requesting tools/list with WRONG Bearer — must be rejected (no tools leaked)..."
+
+WRONG_KEY_RESP=$(curl -s -w '\n%{http_code}' -X POST "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer wrong-key-123" \
+  -d '{"jsonrpc":"2.0","id":0,"method":"tools/list","params":{}}' --max-time 30)
+WRONG_CODE=$(echo "$WRONG_KEY_RESP" | tail -1)
+WRONG_BODY=$(echo "$WRONG_KEY_RESP" | sed '$d')
+
+WRONG_TOOLS=$(echo "$WRONG_BODY" | jq '(.result.tools // []) | length' 2>/dev/null || echo 0)
+AUTH_ENFORCED=false
+if [ "$WRONG_CODE" = "401" ] || [ "$WRONG_CODE" = "403" ]; then
+  AUTH_ENFORCED=true
+elif [ "$WRONG_CODE" = "500" ] && echo "$WRONG_BODY" | grep -qiE 'auth|virtual key|invalid.*token|not found in db'; then
+  # LiteLLM wraps auth rejection as HTTP 500 + error object (not 401/403)
+  AUTH_ENFORCED=true
+fi
+if [ "$AUTH_ENFORCED" = "true" ] && [ "$WRONG_TOOLS" -eq 0 ]; then
+  pass "remote Bearer auth (wrong key rejected with HTTP $WRONG_CODE, no tools leaked)"
+else
+  fail "remote Bearer auth (wrong key NOT rejected: HTTP $WRONG_CODE, tools=$WRONG_TOOLS)"
+fi
 
 # ── Check 1: tools/list ────────────────────────────────────────────────────
 echo ""
@@ -78,13 +113,16 @@ echo ""
 echo "=== Check: extract_bytes ==="
 cyan_info "Generating minimal PNG and calling extract_bytes..."
 
-# Create a tiny base64-encoded PNG inline
-MINIMAL_PNG=$(printf '\x89PNG\r\n\x1a\n' | base64 -w0; echo)
+# Create a tiny base64-encoded PNG inline (portable: temp file + b64 helper)
+MINIMAL_PNG_TMP=$(mktemp)
+printf '\x89PNG\r\n\x1a\n' > "$MINIMAL_PNG_TMP"
+MINIMAL_PNG=$(b64 "$MINIMAL_PNG_TMP")
+rm -f "$MINIMAL_PNG_TMP"
 
 # Use a real fixture if available
 FIXTURE="$SCRIPT_DIR/fixtures/test-image.png"
 if [ -f "$FIXTURE" ]; then
-  TEST_DATA=$(base64 -w0 < "$FIXTURE")
+  TEST_DATA=$(b64 "$FIXTURE")
   MIME_TYPE="image/png"
   cyan_info "Using fixture: $FIXTURE ($(wc -c < "$FIXTURE") bytes)"
 else

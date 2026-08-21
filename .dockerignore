@@ -1,0 +1,6 @@
+# Agentic testing assets — not needed in the runtime container.
+# Skill's agent config:
+src/e2e/agent-runbooks/.agents/
+
+# Test runbooks (documentation):
+src/e2e/agent-runbooks/

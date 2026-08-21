@@ -1,6 +1,11 @@
 #!/bin/bash
-# Smoke test hugging-xberg-mcp against the local compose environment
-# Uses Python-based MCP testing via stdio subprocess (from better-opencode mcp-test)
+# Smoke test hugging-xberg-mcp against the local compose environment.
+#
+# The MCP server is HTTP-only (streamable HTTP transport on :3000/mcp), so all
+# functional checks use HTTP JSON-RPC via curl. Wire probes (405 guards,
+# statelessness, SSE framing) are owned here per ADR-013 — runbooks never do
+# raw HTTP.
+#
 # Usage: ./test.sh
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -19,6 +24,31 @@ pass() { echo -e "  ${GREEN}PASS${NC}: $1"; ((PASSED++)); }
 fail() { echo -e "  ${RED}FAIL${NC}: $1"; ((FAILED++)); }
 info() { echo -e "  ${YELLOW}INFO${NC}: $1"; }
 cyan_info() { echo -e "  ${CYAN}---$1${NC}"; }
+
+# ── Helpers ─────────────────────────────────────────────────────────────────
+# Portable base64 encoder (macOS BSD + GNU): reads a file, strips newlines.
+b64() { base64 < "$1" | tr -d '\n'; }
+
+# SSE unwrapper — the MCP server (and LiteLLM) may wrap responses in SSE:
+#   "event: message\ndata: {json}\n"
+# Strip the wrapper and return just the JSON.
+# NOTE: uses printf '%s\n' (not echo) so backslash escapes inside the JSON are
+# preserved regardless of invoking shell (bash + zsh).
+unwrap_sse() {
+  local raw
+  raw=$(cat)
+  local json_line
+  json_line=$(printf '%s\n' "$raw" | grep '^data: ' | head -1 | sed 's/^data: //')
+  if [ -n "$json_line" ]; then
+    printf '%s\n' "$json_line"
+  else
+    printf '%s\n' "$raw"
+  fi
+}
+
+# MCP endpoint + fixture
+MCP_URL="http://localhost:3000/mcp"
+FIXTURE_PATH="$SCRIPT_DIR/fixtures/test-image.png"
 
 # ── Pre-check: compose must be running ──────────────────────────────────────
 echo ""
@@ -42,269 +72,147 @@ else
   exit 1
 fi
 
-# ── Checks 2-5: MCP server tests via Python ─────────────────────────────────
+# ── Check 2: initialize handshake ───────────────────────────────────────────
 echo ""
-echo "=== Check: MCP server smoke test ==="
-cyan_info "Launching MCP stdio subprocess (docker compose exec hugging-xberg-mcp node src/mcp-server.mjs) ..."
-
-# Use the better-opencode mcp-test.sh that handles stdio properly
-if [ -f "$HOME/.config/opencode/opencode.json" ]; then
-  MCP_TEST="$HOME/.config/opencode/opencode.json"
+echo "=== Check: MCP initialize ==="
+cyan_info "POST initialize to $MCP_URL ..."
+RESPONSE=$(curl -sf -s -X POST "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke-test","version":"1.0"}}}')
+if [ $? -eq 0 ] && printf '%s\n' "$RESPONSE" | unwrap_sse | jq -e '.result.serverInfo' > /dev/null 2>&1; then
+  SERVER_NAME=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq -r '.result.serverInfo.name // "unknown"')
+  SERVER_VERSION=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq -r '.result.serverInfo.version // "?"')
+  pass "MCP initialize (serverInfo=$SERVER_NAME/$SERVER_VERSION)"
 else
-  MCP_TEST="none"
+  fail "MCP initialize (response: $RESPONSE)"
 fi
 
-# Run a quick Python-based smoke test directly
-# The fixture path is resolved relative to the script's directory.
-FIXTURE_PATH="$SCRIPT_DIR/fixtures/test-image.png"
-
-python3 - "$FIXTURE_PATH" << 'PYEOF'
-import json
-import subprocess
-import sys
-import time
-
-def log(msg):
-    """Print verbose info to stdout."""
-    print(f"[INFO] {msg}")
-
-def test_mcp_server(fixture_path):
-    """Test the hugging-xberg-mcp server via stdio."""
-    cmd = [
-        "docker", "compose", "exec", "-T",
-        "hugging-xberg-mcp",
-        "node", "src/mcp-server.mjs"
-    ]
-    
-    log(f"Executing: {cmd}")
-    proc = subprocess.Popen(
-        cmd,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
-    
-    # Wait for startup
-    time.sleep(0.5)
-    if proc.poll() is not None:
-        err = proc.stderr.read()
-        log(f"Server exited early. stderr={err}")
-        print("FAIL: server-exit")
-        return False
-    
-    passed = []
-    failed = []
-    
-    # Check 1: Initialize handshake
-    log("")
-    log("--- Test: initialize-handshake ---")
-    try:
-        init_msg = json.dumps({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "smoke-test", "version": "1.0"}
-            }
-        })
-        log(f"Sent: initialize (id=1)")
-        proc.stdin.write(init_msg + "\n")
-        proc.stdin.flush()
-        
-        line = proc.stdout.readline()
-        response = json.loads(line)
-        log(f"Received: {json.dumps(response, indent=2)}")
-        
-        if "result" in response:
-            server_info = response["result"]
-            log(f"Server name={server_info.get('name')}, version={server_info.get('version')}")
-            passed.append("initialize-handshake")
-        else:
-            failed.append("initialize-handshake")
-    except Exception as e:
-        failed.append(f"initialize-handshake: {str(e)}")
-    
-    # Send initialized notification
-    try:
-        notif = json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"})
-        log("Sent: notifications/initialized")
-        proc.stdin.write(notif + "\n")
-        proc.stdin.flush()
-    except:
-        pass
-    
-    # Check 2: tools/list
-    log("")
-    log("--- Test: tools-list ---")
-    try:
-        tools_msg = json.dumps({
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/list",
-            "params": {}
-        })
-        log(f"Sent: tools/list (id=2)")
-        proc.stdin.write(tools_msg + "\n")
-        proc.stdin.flush()
-        
-        line = proc.stdout.readline()
-        response = json.loads(line)
-        log(f"Received: {json.dumps(response, indent=2)}")
-        
-        if "result" in response:
-            tools_data = response["result"]
-            tool_count = len(tools_data.get("tools", []))
-            for t in tools_data.get("tools", []):
-                log(f"  Tool: name={t['name']}, title={t.get('title','')}, desc={t.get('description','')[:80]}")
-            passed.append(f"tools-list ({tool_count} tools)")
-        else:
-            failed.append("tools-list")
-    except Exception as e:
-        failed.append(f"tools-list: {str(e)}")
-    
-    # Check 3: extract_bytes tool call
-    log("")
-    log(f"--- Test: extract_bytes (with fixture PNG) ---")
-    log(f"Fixture path being used: {fixture_path}")
-    try:
-        import base64, os
-        log(f"File exists at that path: {os.path.isfile(fixture_path)}")
-        # Read the fixture image file
-        if fixture_path and os.path.isfile(fixture_path):
-            with open(fixture_path, "rb") as f:
-                test_bytes = f.read()
-            log(f"Read fixture: {fixture_path} ({len(test_bytes)} bytes)")
-            test_data_b64 = base64.b64encode(test_bytes).decode('ascii')
-        else:
-            # Fallback: generate a tiny PNG in memory
-            import struct, zlib
-            def create_minimal_png():
-                """Create a minimal valid PNG."""
-                width = 2; height = 2
-                raw_data = b''
-                for y in range(height):
-                    raw_data += b'\x00' + bytes([0, 0, 0] * width)
-                compressed = zlib.compress(raw_data)
-                png = bytearray(b'\x89PNG\r\n\x1a\n')
-                ihdr_struct = struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)
-                ihdr_crc = zlib.crc32(b'IHDR' + ihdr_struct) & 0xffffffff
-                png += bytearray(struct.pack('>I', len(ihdr_struct))) + bytearray(ihdr_struct) + struct.pack('>I', ihdr_crc)
-                crc_of_compressed = zlib.crc32(compressed) & 0xffffffff
-                png += struct.pack('>I', len(compressed)) + bytearray(compressed) + struct.pack('>I', crc_of_compressed)
-                iend_crc = zlib.crc32(b'IEND') & 0xffffffff
-                png += struct.pack('>I', 0) + struct.pack('>I', iend_crc)
-                return bytes(png)
-            test_bytes = create_minimal_png()
-            log("Generated minimal PNG in memory")
-            test_data_b64 = base64.b64encode(test_bytes).decode('ascii')
-        
-        call_msg = json.dumps({
-            "jsonrpc": "2.0",
-            "id": 3,
-            "method": "tools/call",
-            "params": {
-                "name": "extract_bytes",
-                "arguments": {
-                    "data": test_data_b64,
-                    "mime_type": "image/png"
-                }
-            }
-        })
-        log(f"Sent: tools/call extract_bytes (id=3)")
-        proc.stdin.write(call_msg + "\n")
-        proc.stdin.flush()
-        
-        line = proc.stdout.readline()
-        response = json.loads(line)
-        log(f"Received: {json.dumps(response, indent=2)}")
-        
-        if "result" in response:
-            content = response["result"].get("content", [])
-            is_error = response["result"].get("isError", False)
-            has_content = any(c.get("type") == "text" for c in content)
-            if has_content and not is_error:
-                text_parts = [c.get('text','')[:100] for c in content if c.get('type')=='text']
-                log(f"Extracted content preview: {text_parts}")
-                passed.append("extract_bytes")
-            else:
-                failed.append("extract_bytes")
-        else:
-            failed.append("extract_bytes")
-    except Exception as e:
-        failed.append(f"extract_bytes: {str(e)}")
-    
-    # Check 4: extract_structured tool call
-    log("")
-    log(f"--- Test: extract_structured (with fixture PNG) ---")
-    try:
-        call_msg = json.dumps({
-            "jsonrpc": "2.0",
-            "id": 4,
-            "method": "tools/call",
-            "params": {
-                "name": "extract_structured",
-                "arguments": {
-                    "data": test_data_b64,
-                    "mime_type": "image/png"
-                }
-            }
-        })
-        log(f"Sent: tools/call extract_structured (id=4)")
-        proc.stdin.write(call_msg + "\n")
-        proc.stdin.flush()
-        
-        line = proc.stdout.readline()
-        response = json.loads(line)
-        log(f"Received: {json.dumps(response, indent=2)}")
-        
-        if "result" in response:
-            content = response["result"].get("content", [])
-            is_error = response["result"].get("isError", False)
-            has_content = any(c.get("type") == "text" for c in content)
-            if has_content and not is_error:
-                text_parts = [c.get('text','')[:100] for c in content if c.get('type')=='text']
-                log(f"Structured content preview: {text_parts}")
-                passed.append("extract_structured")
-            else:
-                failed.append("extract_structured")
-        else:
-            failed.append("extract_structured")
-    except Exception as e:
-        failed.append(f"extract_structured: {str(e)}")
-    
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except:
-        proc.kill()
-    
-    # Output results for bash to parse
-    for p in passed:
-        print(f"PASS: {p}")
-    for f in failed:
-        print(f"FAIL: {f}")
-    
-    return len(failed) == 0
-
-fixture_path = sys.argv[1]
-test_mcp_server(fixture_path)
-PYEOF
-
-# Capture the exit code from python script
-if [ $? -eq 0 ]; then
-  cyan_info "All MCP tests passed — server is healthy and responsive"
+# ── Check 3: tools/list (assert exactly 2 tools) ────────────────────────────
+echo ""
+echo "=== Check: tools/list ==="
+cyan_info "POST tools/list to $MCP_URL ..."
+RESPONSE=$(curl -sf -s -X POST "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
+if [ $? -eq 0 ] && printf '%s\n' "$RESPONSE" | unwrap_sse | jq -e '.result.tools' > /dev/null 2>&1; then
+  TOOL_COUNT=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq '.result.tools | length')
+  TOOL_NAMES=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq -r '.result.tools[].name' | tr '\n' ' ')
+  if [ "$TOOL_COUNT" -eq 2 ] && printf '%s\n' "$RESPONSE" | unwrap_sse \
+      | jq -e '.result.tools | map(.name) | sort == ["extract_bytes","extract_structured"]' > /dev/null 2>&1; then
+    pass "tools/list (2 tools: $TOOL_NAMES)"
+  else
+    fail "tools/list (expected exactly [extract_bytes, extract_structured], got count=$TOOL_COUNT names='$TOOL_NAMES')"
+  fi
 else
-  cyan_info "Some MCP tests failed (see INFO output above)"
+  fail "tools/list (curl failed or no result.tools: $RESPONSE)"
 fi
 
+# ── Check 4: extract_bytes tool call (fixture PNG) ──────────────────────────
+echo ""
+echo "=== Check: extract_bytes ==="
+cyan_info "Calling extract_bytes with fixture PNG ($(wc -c < "$FIXTURE_PATH") bytes) ..."
+TEST_DATA=$(b64 "$FIXTURE_PATH")
+RESPONSE=$(curl -sf -s -X POST "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"extract_bytes\",\"arguments\":{\"data\":\"$TEST_DATA\",\"mime_type\":\"image/png\"}}}")
+if [ $? -eq 0 ] && printf '%s\n' "$RESPONSE" | unwrap_sse | jq -e '.result.content' > /dev/null 2>&1; then
+  HAS_TEXT=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq '[.result.content[] | select(.type == "text")] | length')
+  IS_ERROR=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq '.result | .isError // false')
+  if [ "$HAS_TEXT" -gt 0 ] && [ "$IS_ERROR" = "false" ]; then
+    PREVIEW=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq -r '.result.content[] | select(.type == "text") | .text[0:200]' | head -1)
+    cyan_info "Extracted preview: $PREVIEW"
+    pass "extract_bytes"
+  else
+    fail "extract_bytes (no text content or isError=true)"
+  fi
+else
+  fail "extract_bytes (curl failed or no result.content: $RESPONSE)"
+fi
+
+# ── Check 5: extract_structured tool call (fixture PNG) ─────────────────────
+echo ""
+echo "=== Check: extract_structured ==="
+cyan_info "Calling extract_structured with fixture PNG ..."
+RESPONSE=$(curl -sf -s -X POST "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"extract_structured\",\"arguments\":{\"data\":\"$TEST_DATA\",\"mime_type\":\"image/png\"}}}")
+if [ $? -eq 0 ] && printf '%s\n' "$RESPONSE" | unwrap_sse | jq -e '.result.content' > /dev/null 2>&1; then
+  HAS_TEXT=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq '[.result.content[] | select(.type == "text")] | length')
+  IS_ERROR=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq '.result | .isError // false')
+  if [ "$HAS_TEXT" -gt 0 ] && [ "$IS_ERROR" = "false" ]; then
+    PREVIEW=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq -r '.result.content[] | select(.type == "text") | .text[0:200]' | head -1)
+    cyan_info "Structured preview: $PREVIEW"
+    pass "extract_structured"
+  else
+    fail "extract_structured (no text content or isError=true)"
+  fi
+else
+  fail "extract_structured (curl failed or no result.content: $RESPONSE)"
+fi
+
+# ── Wire probes (scripts-only ownership per ADR-013) ────────────────────────
+echo ""
+echo "=== Check: wire probes ==="
+
+# GET guard — server rejects non-POST with 405
+GET_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "$MCP_URL")
+if [ "$GET_CODE" = "405" ]; then
+  pass "GET /mcp → 405 (method not allowed)"
+else
+  fail "GET /mcp (expected 405, got $GET_CODE)"
+fi
+
+# DELETE guard — server rejects session-delete with 405
+DELETE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 10 -X DELETE "$MCP_URL")
+if [ "$DELETE_CODE" = "405" ]; then
+  pass "DELETE /mcp → 405 (method not allowed)"
+else
+  fail "DELETE /mcp (expected 405, got $DELETE_CODE)"
+fi
+
+# Statelessness — two independent tools/list calls (separate connections, no
+# shared session state) must BOTH return 200 + a valid result.
+SL_OK=true
+SL_ERR=""
+for i in 1 2; do
+  SL_RESP=$(curl -sf -s -m 10 -X POST "$MCP_URL" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d '{"jsonrpc":"2.0","id":10,"method":"tools/list","params":{}}')
+  if [ $? -ne 0 ] || ! printf '%s\n' "$SL_RESP" | unwrap_sse | jq -e '.result.tools' > /dev/null 2>&1; then
+    SL_OK=false
+    SL_ERR="call #$i did not return a valid tools result"
+    break
+  fi
+done
+if [ "$SL_OK" = true ]; then
+  pass "statelessness (2 independent tools/list, both 200 + valid result)"
+else
+  fail "statelessness ($SL_ERR)"
+fi
+
+# SSE framing check — a POST with the SSE Accept header must return SSE framing:
+#   "event: message" line + "data: {json}" line
+SSE_RAW=$(curl -s -m 10 -X POST "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":11,"method":"tools/list","params":{}}')
+if printf '%s\n' "$SSE_RAW" | grep -q '^event: message' && printf '%s\n' "$SSE_RAW" | grep -q '^data: '; then
+  pass "SSE framing (event: message + data: {json})"
+else
+  fail "SSE framing (expected 'event: message' + 'data:' lines, got: $(printf '%s\n' "$SSE_RAW" | head -2))"
+fi
+
+# ── Summary ────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Summary ==="
 cyan_info "Tests passed: $PASSED / Tests failed: $FAILED"
 if [ $FAILED -gt 0 ]; then
-  echo "   Review the INFO lines above for details on failures."
+  echo "   Review the output above for details on failures."
 fi
 
 exit ${FAILED}
