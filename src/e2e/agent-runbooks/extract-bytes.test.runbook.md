@@ -8,7 +8,7 @@
 
 Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1–C4, D1–D4): basic extraction from images and PDFs, VLM-OCR paths, error/edge paths, and config-flag behavior (page markers + the singular-`page` typo guard).
 
-> **Environment-agnostic:** steps reference the **bound tool** — the `extract_bytes` variant discovered at Setup (opencode prefixes by entry name: `hugging-xberg-dev_extract_bytes` → local; remote `hugging-xberg` entry, LiteLLM-wrapped `hugging-xberg_hugging_kreuzberg-*` → remote). Never hardcode a variant.
+> **Remote target:** steps reference the **bound tool** — the remote `extract_bytes` confirmed at Setup (`hugging-xberg_hugging_kreuzberg-extract_bytes`; opencode prefixes by entry name `hugging-xberg_` + LiteLLM upstream server `hugging_kreuzberg`). Confirm the exact remote name at Setup; never hardcode a bare name.
 >
 > **Envelope convention:** parse the tool's text result as JSON — `{results, errors, summary}`. The `errors` key is **omitted when empty** — treat a missing `errors` as `[]`.
 >
@@ -18,7 +18,7 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 
 ### Prerequisites
 
-- The **bound tool** is established (transport runbook F1 passed, or Setup Phase 1 completed): `meta_search("xberg")` shows exactly 2 xberg tools in ONE consistent variant; that variant is the bound `extract_bytes`.
+- The **bound remote tool** is established (transport runbook F1 passed, or Setup Phase 1 completed): `meta_search("xberg")` shows the 2 remote xberg tools under the `hugging-xberg_hugging_kreuzberg-*` prefix; that is the bound `extract_bytes`.
 - The stack is running for the active environment (Setup Phase 1 step 3).
 - Fixtures available at the repo root:
   - `fixtures/test-image.png` — PNG screenshot (1806×844, contains text).
@@ -167,10 +167,9 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 ### Cleanup
 
 - Verification step — confirm the environment is still healthy after the run:
-  - **Local:** the stack liveness check (Setup Phase 1 step 3) still passes.
-  - **Remote:** a cheap bound-tool probe still resolves at the MCP layer (succeeds, or returns a structured tool error rather than a connection failure).
+  - A cheap bound-tool probe still resolves at the MCP layer (succeeds, or returns a structured tool error rather than a connection failure).
 - Fixtures are read-only repo assets — **no teardown needed** (the A3 attachment temp file is removed automatically by opencode after the session).
-- No wire probes in this step; liveness is confirmed through the detected environment only.
+- No wire probes in this step; liveness is confirmed through the remote bound-tool probe only.
 
 ### Expected Outcomes Summary
 

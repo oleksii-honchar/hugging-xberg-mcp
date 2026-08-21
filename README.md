@@ -199,15 +199,14 @@ cd /Users/oleksii.honchar/www/misc/hugging-xberg-mcp
 
 Interactive end-to-end tests for every MCP case, driven by an agent in the chat via registered MCP tools — mirroring the racochu agentic-testing pattern.
 
-- **Runbooks:** [`src/e2e/agent-runbooks/`](src/e2e/agent-runbooks/) — `transport.test.runbook.md` (discovery + env detection, F1–F2), `extract-bytes.test.runbook.md` (A1–D4), `extract-structured.test.runbook.md` (E1–E4)
-- **Skill:** [`xberg-mcp-agentic-testing`](src/e2e/agent-runbooks/.agents/skills/xberg-mcp-agentic-testing/SKILL.md) — executor skill: binds the tool variant, detects the environment at Setup, and runs the runbooks.
+- **Runbooks:** [`src/e2e/agent-runbooks/`](src/e2e/agent-runbooks/) — `transport.test.runbook.md` (discovery + remote tool binding, F1–F2), `extract-bytes.test.runbook.md` (A1–D4), `extract-structured.test.runbook.md` (E1–E4)
+- **Skill:** [`xberg-mcp-agentic-testing`](src/e2e/agent-runbooks/.agents/skills/xberg-mcp-agentic-testing/SKILL.md) — executor skill: binds the remote tool at Setup and runs the runbooks.
 
 **To trigger:** ask for "run xberg agent runbooks" / "test xberg MCP" (DO NOT trigger on "run npm tests" or "run smoke scripts").
 
-**Environment selection** — the runbooks are environment-agnostic; the agent binds to whichever MCP registration is active:
+**Remote target** — the runbooks test the **remote** xberg deployment (LiteLLM on puma.lan). The local dev stack (`./start.sh` + `hugging-xberg-dev`) exists only for the scripted baseline / dev; runbooks bind to the remote variant:
 
-- **Local** (unprefixed `extract_bytes` / `extract_structured`): register `hugging-xberg-dev` → `http://localhost:3000/mcp` in `~/.config/opencode/opencode.jsonc`, then `./start.sh`.
-- **Remote** (LiteLLM-prefixed `hugging_xberg-*`): use the existing `hugging-xberg` registration → `https://lite-llm.lan/mcp/hugging_xberg` (Bearer `LITELLM_API_KEY`).
+- **Remote:** use the `hugging-xberg` registration → `https://lite-llm.lan/mcp/hugging_xberg` (Bearer `LITELLM_API_KEY`). Bound tool names: `hugging-xberg_hugging_kreuzberg-*` (opencode entry prefix + LiteLLM upstream server).
 
 ---
 

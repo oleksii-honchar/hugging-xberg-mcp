@@ -154,6 +154,17 @@ if [ "$PUSH_ONLY" = false ]; then
     cache_opts="--no-cache"
   fi
 
+  # Multi-arch requires --push (buildx pushes directly to the registry,
+  # bypassing the local docker daemon). Only add it for a real build+push;
+  # a build-only (--build-only) run stays a local single-arch build.
+  push_flag=""
+  if [ "$BUILD_ONLY" = false ]; then
+    push_flag="--push"
+  else
+    echo "  Note: --build-only performs a local single-arch build."
+    echo "        Use ./build-and-push.sh (default) for a multi-arch image (requires --push)."
+  fi
+
   # Build tag arguments
   build_tags=()
   for t in "${ALL_TAGS[@]}"; do
@@ -165,6 +176,7 @@ if [ "$PUSH_ONLY" = false ]; then
     "${build_tags[@]}" \
     --progress=plain \
     $cache_opts \
+    $push_flag \
     "$FORK_DIR" \
     2>&1
 
@@ -180,21 +192,29 @@ fi
 if [ "$BUILD_ONLY" = false ]; then
   image_tag="${IMAGE_BASE}:${TAG}"
 
-  echo "=== Pushing: ${image_tag} ==="
+  # When a real build+push (not --build-only, not --push-only) ran above, the
+  # image was already pushed directly to the registry via buildx --push. In that
+  # case there is nothing local to push, so we skip docker push entirely.
+  # Only run docker push here for --push-only mode (image assumed pre-built locally).
+  if [ "$PUSH_ONLY" = true ]; then
+    echo "=== Pushing: ${image_tag} ==="
 
-  run_cmd docker push "${image_tag}"
+    run_cmd docker push "${image_tag}"
 
-  echo "  ✓ Pushed: ${image_tag}"
+    echo "  ✓ Pushed: ${image_tag}"
 
-  # Push version tag if available
-  if [ -n "$PACKAGE_VERSION" ]; then
-    version_image="${IMAGE_BASE}:${PACKAGE_VERSION}"
-    echo ""
-    echo "=== Pushing: ${version_image} ==="
+    # Push version tag if available
+    if [ -n "$PACKAGE_VERSION" ]; then
+      version_image="${IMAGE_BASE}:${PACKAGE_VERSION}"
+      echo ""
+      echo "=== Pushing: ${version_image} ==="
 
-    run_cmd docker push "${version_image}"
+      run_cmd docker push "${version_image}"
 
-    echo "  ✓ Pushed: ${version_image}"
+      echo "  ✓ Pushed: ${version_image}"
+    fi
+  else
+    echo "  (Skipped: image already pushed via buildx --push during the build phase.)"
   fi
 
   echo ""

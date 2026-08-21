@@ -1,4 +1,4 @@
-> Shared conventions (prerequisites, MCP-only, bound tools, envelope assertions, cleanup): see the xberg-mcp-agentic-testing skill (SKILL.md §Runbook Conventions). This runbook is **MCP-discovery + environment detection only** — it carries no wire probes; those live in the scripts (`test.sh` / `test-remote.sh`) only.
+> Shared conventions (prerequisites, MCP-only, bound tools, envelope assertions, cleanup): see the xberg-mcp-agentic-testing skill (SKILL.md §Runbook Conventions). This runbook is **MCP-discovery + remote tool binding only** — it carries no wire probes; those live in the scripts (`test.sh` / `test-remote.sh`) only.
 
 # Agent e2e test
 
@@ -6,31 +6,28 @@
 
 ### Test Objective
 
-Verify **MCP discovery + environment detection** for the xberg wrapper (cases F1–F2): the MCP connection is discoverable via `meta_search`, the correct tool count and input schemas are present, the active environment variant is detected and recorded, and the MCP layer completes an `initialize` handshake implicitly (a bound `tools/call` resolves at the MCP layer rather than failing at the connection).
+Verify **MCP discovery + remote tool binding** for the xberg wrapper (cases F1–F2): the MCP connection is discoverable via `meta_search`, the correct tool count and input schemas are present, the **remote** xberg tool variant is confirmed and bound, and the MCP layer completes an `initialize` handshake implicitly (a bound `tools/call` resolves at the MCP layer rather than failing at the connection).
 
 > This runbook never probes the wire. Tool availability, schemas, and call outcomes are observed **only through MCP tools** (`meta_search` / `meta_use`).
 
 ### Prerequisites
 
-- A local **or** remote xberg MCP registration is active in opencode (the `hugging-xberg-dev` local entry and/or the `hugging-xberg` remote entry may each be `enabled: true` — they coexist without collision; the agent binds to whichever variant is registered).
-- The stack is running for the active environment:
-  - **Local:** `docker compose ps` from the repo root shows both containers (`xberg` + the MCP wrapper) up and healthy.
-  - **Remote:** the puma.lan stack is reachable (equivalent liveness check for the detected environment).
-- You are in an opencode session that has connected to MCP at startup. **If a registration was just added or changed, restart the opencode session first** — opencode does not retry dead MCP connections.
+- The **remote** xberg MCP registration is active in opencode: the `hugging-xberg` entry is `enabled: true`, pointing at `https://lite-llm.lan/mcp/hugging_xberg`, authenticated with a valid `LITELLM_API_KEY`.
+- The remote stack is reachable (puma.lan).
+- You are in an opencode session that has connected to MCP at startup. **If the registration was just added or changed, restart the opencode session first** — opencode does not retry dead MCP connections.
 
 ### Test Steps
 
-#### Step 1 (F1): Tool discovery + environment detection
+#### Step 1 (F1): Remote tool discovery + binding
 
 - Call `meta_search("xberg")`.
 - Inspect the returned xberg tools.
 - **opencode prefixes every MCP tool with the entry name** — xberg tools are never bare. Match on the entry-name prefix.
-- **PASS:** the **two** xberg extract tools (`extract_bytes` + `extract_structured`) are discoverable under the active entry's prefix, and each exposes an **input schema**:
-  - **Local** — `hugging-xberg-dev_extract_bytes`, `hugging-xberg-dev_extract_structured` → the **local** `hugging-xberg-dev` entry is active.
-  - **Remote** — xberg-extract tools through the remote `hugging-xberg` entry (`hugging-xberg_hugging_kreuzberg-*` as of 2026-08-21; confirm at Setup) → the **remote** `hugging-xberg` entry is active.
-- **Record the variant as the active environment** (local = `hugging-xberg-dev_*`, remote = `hugging-xberg_*` non-dev). All subsequent steps use the **bound tool** (the variant you discovered).
-- **FAIL signature:** **0** xberg extract tools discovered (dead connection → follow SKILL.md *dead-connection recovery*: run `./start.sh`, restart the opencode session, re-probe), **or** a tool missing its input schema.
-- **Note:** when **both** entries are `enabled: true`, `meta_search` returns both sets — the 2 local `hugging-xberg-dev_*` xberg extract tools plus the remote entry's tools (which can include non-xberg servers, e.g. paperless, routed through LiteLLM). Select the xberg **extract** tools for the active environment by their entry-name prefix; the presence of extra remote-server tools is expected and not a failure.
+- **PASS:** the **two** xberg extract tools (`extract_bytes` + `extract_structured`) are discoverable under the **remote** `hugging-xberg` entry's prefix, and each exposes an **input schema**:
+  - xberg-extract tools through the remote `hugging-xberg` entry → `hugging-xberg_hugging_kreuzberg-extract_bytes` / `hugging-xberg_hugging_kreuzberg-extract_structured` (as of 2026-08-21; confirm at Setup).
+- **Record the bound remote tool names.** All subsequent steps use these **bound tools**.
+- **FAIL signature:** **0** xberg extract tools discovered (dead connection → follow SKILL.md *dead-connection recovery*: confirm the `hugging-xberg` opencode entry + `LITELLM_API_KEY`, restart the opencode session, re-probe), **or** a tool missing its input schema.
+- **Note:** the remote `hugging-xberg` entry routes through LiteLLM, so `meta_search` may also show non-xberg servers (e.g. paperless) under it. Select the xberg **extract** tools by their `hugging-xberg_hugging_kreuzberg-*` prefix; extra remote-server tools are expected and not a failure.
 
 #### Step 2 (F2): `initialize` (implicit)
 
@@ -42,15 +39,13 @@ Verify **MCP discovery + environment detection** for the xberg wrapper (cases F1
 
 ### Cleanup
 
-- Verification step — confirm the stack is still healthy after the run:
-  - **Local:** `docker compose ps` still shows both containers (`xberg` + the MCP wrapper) up and healthy.
-  - **Remote:** a cheap bound-tool probe still resolves at the MCP layer (succeeds, or returns a structured tool error rather than a connection failure).
+- Verification step — confirm the remote stack is still healthy after the run: a cheap bound-tool probe still resolves at the MCP layer (succeeds, or returns a structured tool error rather than a connection failure).
 - Fixtures are read-only repo assets — **no teardown needed**.
-- No wire probes in this step; liveness is confirmed through the detected environment only.
+- No wire probes in this step; liveness is confirmed through the remote bound-tool probe only.
 
 ### Expected Outcomes Summary
 
 | Case | PASS signature | Notes |
 |------|----------------|-------|
-| **F1** — Discovery + env detection | The 2 xberg extract tools present under ONE active entry prefix, each with an input schema | Records the bound variant → active environment (`hugging-xberg-dev_*` = local, `hugging-xberg_*` non-dev = remote) |
+| **F1** — Remote discovery + binding | The 2 xberg extract tools present under the remote `hugging-xberg` entry prefix (`hugging-xberg_hugging_kreuzberg-*`), each with an input schema | Records the bound remote tool names |
 | **F2** — `initialize` (implicit) | Tools discoverable **and** probe `tools/call` succeeds OR returns a structured MCP tool error (not a connection/timeout failure) | Confirms the MCP handshake is established at the connection layer |

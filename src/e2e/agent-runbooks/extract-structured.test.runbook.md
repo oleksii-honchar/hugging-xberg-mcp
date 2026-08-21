@@ -8,7 +8,7 @@
 
 Verify the **bound `extract_structured` tool** end-to-end (cases E1–E4): basic structured extraction from an image, structured extraction on a multi-page PDF, a nested/complex result shape, and the input-validation error path.
 
-> **Environment-agnostic:** steps reference the **bound tool** — the `extract_structured` variant discovered at Setup (opencode prefixes by entry name: `hugging-xberg-dev_extract_structured` → local; remote `hugging-xberg` entry, LiteLLM-wrapped `hugging-xberg_hugging_kreuzberg-*` → remote). Never hardcode a variant.
+> **Remote target:** steps reference the **bound tool** — the remote `extract_structured` confirmed at Setup (`hugging-xberg_hugging_kreuzberg-extract_structured`; opencode prefixes by entry name `hugging-xberg_` + LiteLLM upstream server `hugging_kreuzberg`). Confirm the exact remote name at Setup; never hardcode a bare name.
 >
 > **Tool parameters (verified against `src/tools.js`):** `extract_structured` accepts **only `data`** (required) — there is **no schema/fields argument** in the tool signature. The extraction schema is **server-configured** (the `structured_extraction` config built by `xberg-client.js` from xberg config; default schema in `src/structured-schema.json` with `title`, `subtitle`, `metrics`). Steps therefore pass only `data` and assert on the **shape** of the server-returned structured result, never on exact values.
 >
@@ -20,7 +20,7 @@ Verify the **bound `extract_structured` tool** end-to-end (cases E1–E4): basic
 
 ### Prerequisites
 
-- The **bound tool** is established (transport runbook F1 passed, or Setup Phase 1 completed): `meta_search("xberg")` shows exactly 2 xberg tools in ONE consistent variant; that variant is the bound `extract_structured`.
+- The **bound remote tool** is established (transport runbook F1 passed, or Setup Phase 1 completed): `meta_search("xberg")` shows the 2 remote xberg tools under the `hugging-xberg_hugging_kreuzberg-*` prefix; that is the bound `extract_structured`.
 - The stack is running for the active environment (Setup Phase 1 step 3).
 - Fixtures available at the repo root:
   - `fixtures/test-image.png` — PNG screenshot (1806×844, contains text and rich visual content for structured extraction).
@@ -68,11 +68,9 @@ Verify the **bound `extract_structured` tool** end-to-end (cases E1–E4): basic
 
 ### Cleanup
 
-- Verification step — confirm the environment is still healthy after the run:
-  - **Local:** the stack liveness check (Setup Phase 1 step 3) still passes.
-  - **Remote:** a cheap bound-tool probe still resolves at the MCP layer (succeeds, or returns a structured tool error rather than a connection failure).
+- Verification step — confirm the remote stack is still healthy after the run: a cheap bound-tool probe still resolves at the MCP layer (succeeds, or returns a structured tool error rather than a connection failure).
 - Fixtures are read-only repo assets — **no teardown needed**.
-- No wire probes in this step; liveness is confirmed through the detected environment only.
+- No wire probes in this step; liveness is confirmed through the remote bound-tool probe only.
 
 ### Expected Outcomes Summary
 
