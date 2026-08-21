@@ -49,7 +49,7 @@ services:
         required: false
     environment:
       - XBERG_API_URL=http://xberg:8000
-      - XBERG_LLM_BASE_URL=http://lite-llm:4000/v1
+      - XBERG_LLM_BASE_URL=https://lite-llm.lan/v1
       - XBERG_LLM_MODEL=${XBERG_LLM_MODEL}
       - LITELLM_API_KEY=${LITELLM_API_KEY}
     depends_on:
