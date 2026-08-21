@@ -1,0 +1,61 @@
+# Xberg MCP stack: upstream xberg engine (REST :8000) + hugging-xberg-mcp wrapper (:3000).
+#
+# Architecture:
+#   - xberg: upstream extraction engine (ghcr.io/xberg-io/xberg:1.0.14, pinned per ADR-008)
+#   - hugging-xberg-mcp: stateless HTTP MCP wrapper that talks to xberg via HTTP
+#
+# xberg reaches LiteLLM over the internal puma-net network as http://lite-llm:4000/v1
+# (internal service name `lite-llm`, port 4000). No TLS mounts: the old kreuzberg
+# root.crt / SSL_CERT_FILE / CURL_CA_BUNDLE setup is obsolete for the internal http URL.
+
+services:
+  xberg:
+    image: ghcr.io/xberg-io/xberg:1.0.14
+    container_name: xberg
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Fresh cache volume (kreuzberg-cache → xberg-cache). xberg re-downloads its
+      # models from the xberg-io HF org into /app/.xberg on first start — expected,
+      # one-time download, not a failure.
+      - xberg-cache:/app/.xberg
+      - ./xberg.toml:/app/xberg.toml
+    environment:
+      # VLM OCR + structured extraction point at LiteLLM on puma-net (internal http).
+      - XBERG_VLM_OCR_MODEL=${XBERG_VLM_OCR_MODEL}
+      - XBERG_LLM_BASE_URL=http://lite-llm:4000/v1
+      - XBERG_LLM_MODEL=${XBERG_LLM_MODEL}
+      - XBERG_LLM_API_KEY=${LITELLM_API_KEY}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  hugging-xberg-mcp:
+    image: tuiteraz/hugging-xberg-mcp:latest
+    container_name: hugging-xberg-mcp
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config.example.json:/app/config.json:ro
+      - ./src/structured-schema.json:/app/src/structured-schema.json:ro
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - XBERG_API_URL=http://xberg:8000
+      - XBERG_LLM_BASE_URL=http://lite-llm:4000/v1
+      - XBERG_LLM_MODEL=${XBERG_LLM_MODEL}
+      - LITELLM_API_KEY=${LITELLM_API_KEY}
+    depends_on:
+      xberg:
+        condition: service_healthy
+
+volumes:
+  xberg-cache:
+    driver: local

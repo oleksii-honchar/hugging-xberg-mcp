@@ -1,0 +1,11 @@
+# Xberg configuration — VLM OCR only.
+# Loaded by the xberg engine starting from /app.
+# Structured extraction LLM config is set via XBERG_LLM_* env vars.
+# VLM OCR api_key is set via XBERG_LLM_API_KEY env var.
+
+[ocr]
+backend = "vlm"
+
+[ocr.vlm_config]
+model = "puma-qwopus3.5-9b-instruct"
+base_url = "http://lite-llm:4000/v1"

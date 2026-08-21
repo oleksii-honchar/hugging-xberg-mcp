@@ -1,0 +1,19 @@
+{
+  "title": "extraction",
+  "type": "object",
+  "properties": {
+    "title": { "type": "string" },
+    "subtitle": { "type": "string" },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "number" },
+          "delta": { "type": "number" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schema": {
+    "$defs": {},
+    "properties": {},
+    "title": "extraction",
+    "type": "object"
+  },
+  "llm": {
+    "model": "puma-lite-llm/qwopus3.5-9b-instruct",
+    "api_key": null,
+    "base_url": null,
+    "timeout_secs": null,
+    "max_retries": null,
+    "temperature": null,
+    "max_tokens": null
+  }
+}
