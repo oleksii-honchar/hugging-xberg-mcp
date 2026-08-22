@@ -24,10 +24,10 @@ Verify **MCP discovery + remote tool binding** for the xberg wrapper (cases F1�
 - Inspect the returned xberg tools.
 - **opencode prefixes every MCP tool with the entry name** — xberg tools are never bare. Match on the entry-name prefix.
 - **PASS:** the **two** xberg extract tools (`extract_bytes` + `extract_structured`) are discoverable under the **remote** `hugging-xberg` entry's prefix, and each exposes an **input schema**:
-  - xberg-extract tools through the remote `hugging-xberg` entry → `hugging-xberg_hugging_kreuzberg-extract_bytes` / `hugging-xberg_hugging_kreuzberg-extract_structured` (as of 2026-08-21; confirm at Setup).
+  - xberg-extract tools through the remote `hugging-xberg` entry → `hugging-xberg_hugging_xberg-extract_bytes` / `hugging-xberg_hugging_xberg-extract_structured` (as of 2026-08-22; confirm at Setup).
 - **Record the bound remote tool names.** All subsequent steps use these **bound tools**.
 - **FAIL signature:** **0** xberg extract tools discovered (dead connection → follow SKILL.md *dead-connection recovery*: confirm the `hugging-xberg` opencode entry + `LITELLM_API_KEY`, restart the opencode session, re-probe), **or** a tool missing its input schema.
-- **Note:** the remote `hugging-xberg` entry routes through LiteLLM, so `meta_search` may also show non-xberg servers (e.g. paperless) under it. Select the xberg **extract** tools by their `hugging-xberg_hugging_kreuzberg-*` prefix; extra remote-server tools are expected and not a failure.
+- **Note:** the remote `hugging-xberg` entry routes through LiteLLM, so `meta_search` may also show non-xberg servers (e.g. paperless) under it. Select the xberg **extract** tools by their `hugging-xberg_hugging_xberg-*` prefix; extra remote-server tools are expected and not a failure.
 
 #### Step 2 (F2): `initialize` (implicit)
 
@@ -47,5 +47,5 @@ Verify **MCP discovery + remote tool binding** for the xberg wrapper (cases F1�
 
 | Case | PASS signature | Notes |
 |------|----------------|-------|
-| **F1** — Remote discovery + binding | The 2 xberg extract tools present under the remote `hugging-xberg` entry prefix (`hugging-xberg_hugging_kreuzberg-*`), each with an input schema | Records the bound remote tool names |
+| **F1** — Remote discovery + binding | The 2 xberg extract tools present under the remote `hugging-xberg` entry prefix (`hugging-xberg_hugging_xberg-*`), each with an input schema | Records the bound remote tool names |
 | **F2** — `initialize` (implicit) | Tools discoverable **and** probe `tools/call` succeeds OR returns a structured MCP tool error (not a connection/timeout failure) | Confirms the MCP handshake is established at the connection layer |

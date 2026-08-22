@@ -8,7 +8,7 @@
 
 Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1–C4, D1–D4): basic extraction from images and PDFs, VLM-OCR paths, error/edge paths, and config-flag behavior (page markers + the singular-`page` typo guard).
 
-> **Remote target:** steps reference the **bound tool** — the remote `extract_bytes` confirmed at Setup (`hugging-xberg_hugging_kreuzberg-extract_bytes`; opencode prefixes by entry name `hugging-xberg_` + LiteLLM upstream server `hugging_kreuzberg`). Confirm the exact remote name at Setup; never hardcode a bare name.
+> **Remote target:** steps reference the **bound tool** — the remote `extract_bytes` confirmed at Setup (`hugging-xberg_hugging_xberg-extract_bytes`; opencode prefixes by entry name `hugging-xberg_` + LiteLLM upstream server `hugging_xberg`). Confirm the exact remote name at Setup; never hardcode a bare name.
 >
 > **Envelope convention:** parse the tool's text result as JSON — `{results, errors, summary}`. The `errors` key is **omitted when empty** — treat a missing `errors` as `[]`.
 >
@@ -18,7 +18,7 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 
 ### Prerequisites
 
-- The **bound remote tool** is established (transport runbook F1 passed, or Setup Phase 1 completed): `meta_search("xberg")` shows the 2 remote xberg tools under the `hugging-xberg_hugging_kreuzberg-*` prefix; that is the bound `extract_bytes`.
+- The **bound remote tool** is established (transport runbook F1 passed, or Setup Phase 1 completed): `meta_search("xberg")` shows the 2 remote xberg tools under the `hugging-xberg_hugging_xberg-*` prefix; that is the bound `extract_bytes`.
 - The stack is running for the active environment (Setup Phase 1 step 3).
 - Fixtures available at the repo root:
   - `fixtures/test-image.png` — PNG screenshot (1806×844, contains text).

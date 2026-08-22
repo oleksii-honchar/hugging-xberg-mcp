@@ -206,7 +206,7 @@ Interactive end-to-end tests for every MCP case, driven by an agent in the chat 
 
 **Remote target** — the runbooks test the **remote** xberg deployment (LiteLLM on puma.lan). The local dev stack (`./start.sh` + `hugging-xberg-dev`) exists only for the scripted baseline / dev; runbooks bind to the remote variant:
 
-- **Remote:** use the `hugging-xberg` registration → `https://lite-llm.lan/mcp/hugging_xberg` (Bearer `LITELLM_API_KEY`). Bound tool names: `hugging-xberg_hugging_kreuzberg-*` (opencode entry prefix + LiteLLM upstream server).
+- **Remote:** use the `hugging-xberg` registration → `https://lite-llm.lan/mcp/hugging_xberg` (Bearer `LITELLM_API_KEY`). Bound tool names: `hugging-xberg_hugging_xberg-*` (opencode entry prefix + LiteLLM upstream server).
 
 ---
 

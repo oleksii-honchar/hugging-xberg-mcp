@@ -8,7 +8,7 @@
 
 Verify the **bound `extract_structured` tool** end-to-end (cases E1–E4): basic structured extraction from an image, structured extraction on a multi-page PDF, a nested/complex result shape, and the input-validation error path.
 
-> **Remote target:** steps reference the **bound tool** — the remote `extract_structured` confirmed at Setup (`hugging-xberg_hugging_kreuzberg-extract_structured`; opencode prefixes by entry name `hugging-xberg_` + LiteLLM upstream server `hugging_kreuzberg`). Confirm the exact remote name at Setup; never hardcode a bare name.
+> **Remote target:** steps reference the **bound tool** — the remote `extract_structured` confirmed at Setup (`hugging-xberg_hugging_xberg-extract_structured`; opencode prefixes by entry name `hugging-xberg_` + LiteLLM upstream server `hugging_xberg`). Confirm the exact remote name at Setup; never hardcode a bare name.
 >
 > **Tool parameters (verified against `src/tools.js`):** `extract_structured` accepts **only `data`** (required) — there is **no schema/fields argument** in the tool signature. The extraction schema is **server-configured** (the `structured_extraction` config built by `xberg-client.js` from xberg config; default schema in `src/structured-schema.json` with `title`, `subtitle`, `metrics`). Steps therefore pass only `data` and assert on the **shape** of the server-returned structured result, never on exact values.
 >
@@ -20,7 +20,7 @@ Verify the **bound `extract_structured` tool** end-to-end (cases E1–E4): basic
 
 ### Prerequisites
 
-- The **bound remote tool** is established (transport runbook F1 passed, or Setup Phase 1 completed): `meta_search("xberg")` shows the 2 remote xberg tools under the `hugging-xberg_hugging_kreuzberg-*` prefix; that is the bound `extract_structured`.
+- The **bound remote tool** is established (transport runbook F1 passed, or Setup Phase 1 completed): `meta_search("xberg")` shows the 2 remote xberg tools under the `hugging-xberg_hugging_xberg-*` prefix; that is the bound `extract_structured`.
 - The stack is running for the active environment (Setup Phase 1 step 3).
 - Fixtures available at the repo root:
   - `fixtures/test-image.png` — PNG screenshot (1806×844, contains text and rich visual content for structured extraction).

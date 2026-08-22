@@ -7,7 +7,7 @@ description: |
   DO NOT trigger on "run npm tests" or "run tests" — that is the `npm test` unit suite.
   DO NOT trigger on "run smoke scripts", "run test.sh", or "run test-remote.sh" — those are the automated shell-script baseline.
 version: '1.0'
-updatedAt: '2026-08-21T15:50:00+03:00'
+updatedAt: '2026-08-22T00:00:00+03:00'
 author: 'hugging-xberg-mcp'
 status: 'production-ready'
 tags: ['agentic-testing', 'agent-runbooks', 'mcp', 'xberg', 'interactive']
@@ -82,10 +82,10 @@ The runbooks run against the **remote xberg deployment** served through LiteLLM 
 
 **Verification:** after (re)starting the opencode session, run `meta_search("xberg")`. **opencode prefixes every MCP tool with the entry name**, so the remote xberg tools are:
 
-- `hugging-xberg_hugging_kreuzberg-extract_bytes`
-- `hugging-xberg_hugging_kreuzberg-extract_structured`
+- `hugging-xberg_hugging_xberg-extract_bytes`
+- `hugging-xberg_hugging_xberg-extract_structured`
 
-i.e. opencode entry prefix `hugging-xberg_` + the LiteLLM **upstream server** name (`hugging_kreuzberg` as of 2026-08-21). If neither appears, the remote `hugging-xberg` entry is not bound — see "Dead-connection recovery" in the Workflow.
+i.e. opencode entry prefix `hugging-xberg_` + the LiteLLM **upstream server** name (`hugging_xberg` as of 2026-08-22). If neither appears, the remote `hugging-xberg` entry is not bound — see "Dead-connection recovery" in the Workflow.
 
 ---
 
@@ -98,13 +98,13 @@ Runbooks target the **remote** xberg variant; the agent binds it at Setup.
 | Stack | puma.lan compose (xberg served through LiteLLM) |
 | Endpoint | `https://lite-llm.lan/mcp/hugging_xberg` |
 | opencode entry | `hugging-xberg` |
-| `extract_bytes` | `meta_use("hugging-xberg_hugging_kreuzberg-extract_bytes", …)` |
-| `extract_structured` | `meta_use("hugging-xberg_hugging_kreuzberg-extract_structured", …)` |
+| `extract_bytes` | `meta_use("hugging-xberg_hugging_xberg-extract_bytes", …)` |
+| `extract_structured` | `meta_use("hugging-xberg_hugging_xberg-extract_structured", …)` |
 | Auth | Bearer `LITELLM_API_KEY` (env/`.env`, never hardcoded) |
-| **Detection signal** | `hugging-xberg_hugging_kreuzberg-*` xberg-extract names present |
+| **Detection signal** | `hugging-xberg_hugging_xberg-*` xberg-extract names present |
 | **Logs to check** | puma.lan LiteLLM / xberg logs |
 
-Remote xberg tool names = opencode entry prefix `hugging-xberg_` + the LiteLLM **upstream server** name. As of 2026-08-21 the remote upstream is the legacy `hugging_kreuzberg` server, so remote tools are `hugging-xberg_hugging_kreuzberg-*`. Confirm the exact remote name with `meta_search("xberg")` at Setup (it changes if the LiteLLM upstream is renamed).
+Remote xberg tool names = opencode entry prefix `hugging-xberg_` + the LiteLLM **upstream server** name. As of 2026-08-22 the remote upstream is the `hugging_xberg` server, so remote tools are `hugging-xberg_hugging_xberg-*`. Confirm the exact remote name with `meta_search("xberg")` at Setup (it changes if the LiteLLM upstream is renamed).
 
 **All steps go through MCP tools (`meta_search` / `meta_use`) — no raw HTTP in any runbook.** Bash is only for: base64 payload computation (`b64()` helper) and reading logs.
 
@@ -117,7 +117,7 @@ Remote xberg tool names = opencode entry prefix `hugging-xberg_` + the LiteLLM *
 **Objective:** Bind the remote xberg tool variant, verify LLM reachability.
 
 1. **Bind remote tool:** run `meta_search("xberg")` — confirm the remote variant is registered:
-   - `hugging-xberg_hugging_kreuzberg-extract_bytes` / `hugging-xberg_hugging_kreuzberg-extract_structured` (as of 2026-08-21; confirm the exact name at Setup) → **remote** (the runbook target).
+   - `hugging-xberg_hugging_xberg-extract_bytes` / `hugging-xberg_hugging_xberg-extract_structured` (as of 2026-08-22; confirm the exact name at Setup) → **remote** (the runbook target).
 
    Use the bound tool name in every step.
 
@@ -238,7 +238,7 @@ Related knowledge lives in the repo vault — reference by name, never copy:
 
 | Anti-Pattern | Correction |
 |---|---|
-| Using bare `extract_bytes` / assuming "unprefixed" tools | **opencode always prefixes MCP tools with the entry name** — remote xberg tools are `hugging-xberg_hugging_kreuzberg-*` (entry prefix `hugging-xberg_` + LiteLLM upstream server `hugging_kreuzberg`), never bare (`.vault/memories/0003-litellm-tool-name-prefixing`). Bind via `meta_search` at Setup and match the entry-name prefix; never hardcode a bare name. |
+| Using bare `extract_bytes` / assuming "unprefixed" tools | **opencode always prefixes MCP tools with the entry name** — remote xberg tools are `hugging-xberg_hugging_xberg-*` (entry prefix `hugging-xberg_` + LiteLLM upstream server `hugging_xberg`), never bare (`.vault/memories/0003-litellm-tool-name-prefixing`). Bind via `meta_search` at Setup and match the entry-name prefix; never hardcode a bare name. |
 | Assuming server-side session state across calls | LiteLLM reinitializes the MCP session per operation (create transport → initialize → call → close); the server is stateless (`.vault/memories/0002-litellm-reinit-per-operation`). Never rely on state from a previous call. |
 | Sending corrupted or line-wrapped base64 | Corrupted base64 produces parse errors (422-style) (`.vault/memories/0006-base64-corruption-422-errors`). Use the portable helper: `b64() { base64 < "$1" | tr -d '\n'; }`. |
 | Expecting opencode to reconnect after the stack dies | opencode never retries dead MCP connections (`.vault/memories/0004-opencode-no-retry-mcp-connection`). Confirm the remote `hugging-xberg` entry is correct, then **restart the opencode session**. |
@@ -262,7 +262,7 @@ Stop and ask when you encounter:
 ## Quality Checklist
 
 - [ ] Confirmed this is an agent-runbook request (not "run npm tests" / "run smoke scripts")
-- [ ] Bound REMOTE tool variant verified via `meta_search("xberg")` (`hugging-xberg_hugging_kreuzberg-*`)
+- [ ] Bound REMOTE tool variant verified via `meta_search("xberg")` (`hugging-xberg_hugging_xberg-*`)
 - [ ] Remote environment + endpoint recorded
 - [ ] LLM probe run at Setup; status recorded
 - [ ] Every runbook step executed via MCP tools (no raw HTTP in runbooks)
