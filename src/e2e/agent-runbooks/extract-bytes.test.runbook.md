@@ -173,6 +173,33 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 - **FAIL signature:** tool-level error, empty `content`, or a timeout (the default OCR path was still taken).
 - Text-layer PDF — no OCR needed; the flag must not break the normal path.
 
+#### Step 18 (D6): `disable_ocr` on PNG — empty content (no text layer)
+
+- **Not LLM-dependent** — the flag skips VLM OCR; runs even if the Setup LLM probe failed.
+- **Input:** `data` = `(b64 fixtures/test-image.png)`, `mime_type: "image/png"`, `disable_ocr: true`.
+- **Invoke:** bound `extract_bytes` via `meta_use`.
+- **PASS:** valid envelope — `results` non-empty; `results[0].content` **empty or very short** (images have no native text layer; no OCR was performed); `errors` absent (⇒ `[]`) or empty. **Fast response** (no LLM call).
+- **FAIL signature:** tool-level error, or a timeout (the flag was ignored and VLM OCR was still attempted).
+- **Contrast test:** compare with B1 (same PNG, no `disable_ocr`) — B1 uses VLM and returns OCR text (LLM-dependent); D6 skips VLM and returns empty (fast).
+
+#### Step 19 (D7): OCR vs `disable_ocr` comparison — same PDF, both modes
+
+- **LLM-dependent for OCR path** — D7a uses default OCR (LLM); D7b uses `disable_ocr` (no LLM).
+- **D7a — OCR enabled (default):**
+  - **Input:** `data` = `(b64 fixtures/multi-page.pdf)`, `mime_type: "application/pdf"` — no `disable_ocr` param.
+  - **Invoke:** bound `extract_bytes` via `meta_use`.
+  - **PASS (LLM-dependent):** valid envelope — `results` non-empty; `results[0].content` non-empty; `errors` absent (⇒ `[]`) or empty.
+  - **FAIL signature:** empty `content` or non-empty `errors` when LLM is available.
+  - **BLOCKED (LLM config)** if the Setup LLM probe failed.
+
+- **D7b — OCR disabled:**
+  - **Input:** `data` = `(b64 fixtures/multi-page.pdf)`, `mime_type: "application/pdf"`, `disable_ocr: true`.
+  - **Invoke:** bound `extract_bytes` via `meta_use`.
+  - **PASS:** valid envelope — `results` non-empty; `results[0].content` non-empty (native text layer, no VLM); `errors` absent (⇒ `[]`) or empty. **Fast response**.
+  - **FAIL signature:** tool-level error, empty `content`, or timeout.
+
+- **Comparison assertion:** Both D7a and D7b should succeed on a text-layer PDF. D7b is faster (no LLM). On scanned/image-only PDFs, D7a would use VLM OCR (slow) while D7b returns only the native text layer (fast, possibly empty).
+
 ### Cleanup
 
 - Verification step — confirm the environment is still healthy after the run:
@@ -200,4 +227,6 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 | **D2** — markers false | Content contains no `<!-- PAGE` markers | No |
 | **D3** — markers default (omitted) | Documented default: no `<!-- PAGE` markers (default false) | No |
 | **D4** — singular `page` typo guard | `isError: true`, 400 "unknown field page" | No |
-| **D5** — `disable_ocr: true` | Envelope OK; content non-empty (native text layer, no VLM); fast on image-only docs | No |
+| **D5** — `disable_ocr: true` (PDF) | Envelope OK; content non-empty (native text layer, no VLM); fast on image-only docs | No |
+| **D6** — `disable_ocr: true` (PNG) | Envelope OK; content empty/short (no text layer in images, no OCR); **fast** (no LLM) | No |
+| **D7** — OCR vs disable_ocr comparison | D7a (OCR): content non-empty (LLM-dependent); D7b (disable_ocr): content non-empty, fast; both succeed on text-layer PDFs | **Partial — D7a yes, D7b no** |
