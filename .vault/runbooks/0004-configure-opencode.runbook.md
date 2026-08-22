@@ -38,9 +38,19 @@ Configure hugging-xberg-mcp as a remote MCP server in opencode and validate the 
         "hugging_xberg-extract_bytes",
         "hugging_xberg-extract_structured"
       ]
-      // Optional: increase timeout if server is slow (default 30s)
-      // "timeout": 60000
+      // Timeouts (verified against opencode 1.14.29):
+      // - Per-server "timeout" (ms): Timeout in ms for MCP server requests.
+      //   Defaults to 5000 (5 seconds) if not specified. The docs frame it as
+      //   the timeout for fetching tools at startup, not tool calls.
+      //   // "timeout": 60000
     }
+  },
+  // - experimental.mcp_timeout (ms): Timeout in milliseconds for model context
+  //   protocol (MCP) requests. This is the authoritative knob for tool-call
+  //   timeouts. Slow OCR can take 1-2 min, so set it well above the default:
+  //   // "experimental": { "mcp_timeout": 300000 }  // 5 minutes
+  "experimental": {
+    "mcp_timeout": 300000
   }
 }
 ```

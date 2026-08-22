@@ -50,6 +50,7 @@ OCR: Read and extract text from images, PDFs, and other documents. Returns extra
 | `data` | string | yes | File data in one of these formats: (1) `opencode://attachment/<uuid>` (attached files), (2) `data:image/png;base64,...` (data URL), (3) raw base64 string. **HTTP URLs are NOT supported.** |
 | `mime_type` | string | no | Optional MIME type hint for the file |
 | `config` | object | no | Optional extraction config override as JSON (passed through to Xberg `/extract`; see [PDF support & pagination](#pdf-support--pagination)) |
+| `disable_ocr` | boolean | no | Skip OCR (VLM) on scanned/image-only pages — returns only the native text layer. Faster, no LLM call. Use when the default request times out. |
 | `response_format` | string | no | `'json'` (default envelope), `'toon'`, or `'plain'` / `'markdown'` / `'djot'` / `'html'` content rendering |
 
 **Input size limit:** `MAX_BASE64_LENGTH` = **48,900,000 chars** (~36.5MB raw ≈ 97% of the 50mb JSON body envelope). Larger payloads are rejected by the client guard; the Express body limit (`MCP_BODY_LIMIT`, default **50mb**) rejects oversized requests with HTTP 413 → MCP error -32600.
@@ -85,6 +86,7 @@ Pagination is **output-side** (ADR-007): Xberg does **not** support input-side p
 - **Page markers:** `config.pages.insert_page_markers: true` — extracted text contains `<!-- PAGE {n} -->` markers between pages. ⚠️ Use the key `pages` (plural) — a top-level `page` key is rejected by Xberg with HTTP 400 `ValidationError: unknown field page`.
 - **Chunks:** `config.chunking: { "max_characters": 2000 }` — results are chunked and each chunk carries `first_page`/`last_page` metadata.
 - **OCR-only pages:** `config.force_ocr_pages: [1, 2]` (1-indexed) — force OCR for specific pages.
+- **Skip OCR (timeout recovery):** `disable_ocr: true` (first-class `extract_bytes` param, merged into `config`) — skips the VLM-OCR path on scanned/image-only pages and returns only the native text layer. Faster, no LLM call. Use when the default request times out on chart-heavy or image-only PDFs.
 
 Example for a large PDF:
 

@@ -28,7 +28,9 @@ export function registerTools(mcpServer) {
         'Xberg responses use the {results, errors, summary} envelope. ' +
         'For large PDFs, pass pagination config keys such as pages.insert_page_markers, ' +
         'chunking, or force_ocr_pages, e.g. {"pages": {"insert_page_markers": true}}, ' +
-        '{"chunking": {"max_characters": 2000}}, or {"force_ocr_pages": [1, 2]}.',
+        '{"chunking": {"max_characters": 2000}}, or {"force_ocr_pages": [1, 2]}. ' +
+        'If the default request times out on scanned or image-only pages, pass ' +
+        'disable_ocr: true to skip OCR (VLM) and return the native text layer faster — no LLM call.',
       inputSchema: z.object({
         data: z.string().describe(
           'File data to extract text from. Accepts one of these formats:\n' +
@@ -42,6 +44,10 @@ export function registerTools(mcpServer) {
         ),
         mime_type: z.string().optional().describe('Optional MIME type hint for the file'),
         config: z.record(z.unknown()).optional().describe('Optional extraction config override as JSON'),
+        disable_ocr: z.boolean().optional().describe(
+          'Skip OCR (VLM) on scanned/image-only pages — returns only the native text layer. ' +
+          'Faster, no LLM call. Use when the default request times out.'
+        ),
         response_format: z
           .enum(['json', 'toon', 'plain', 'markdown', 'djot', 'html'])
           .optional()
@@ -86,7 +92,8 @@ async function handleExtractBytes(args) {
   try {
     logInfo(`extract_bytes invoked data=${truncateBase64(args.data)} mime_type=${args.mime_type ?? 'unset'} config=${args.config ? 'present' : 'absent'} response_format=${args.response_format ?? 'unset'}`);
 
-    const result = await xbergExtractBytes(args);
+    const config = args.disable_ocr ? { ...(args.config ?? {}), disable_ocr: true } : args.config;
+    const result = await xbergExtractBytes({ ...args, config });
 
     if (!result.ok) {
       return { content: [{ type: 'text', text: result.error }], isError: true };

@@ -6,7 +6,7 @@
 
 ### Test Objective
 
-Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1–C4, D1–D4): basic extraction from images and PDFs, VLM-OCR paths, error/edge paths, and config-flag behavior (page markers + the singular-`page` typo guard).
+Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1–C4, D1–D5): basic extraction from images and PDFs, VLM-OCR paths, error/edge paths, and config-flag behavior (page markers + the singular-`page` typo guard + the `disable_ocr` timeout-recovery flag).
 
 > **Remote target:** steps reference the **bound tool** — the remote `extract_bytes` confirmed at Setup (`hugging-xberg_hugging_xberg-extract_bytes`; opencode prefixes by entry name `hugging-xberg_` + LiteLLM upstream server `hugging_xberg`). Confirm the exact remote name at Setup; never hardcode a bare name.
 >
@@ -164,6 +164,15 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 - **FAIL signature:** `isError: false` (singular `page` silently accepted or silently ignored).
 - **Not LLM-dependent.**
 
+#### Step 17 (D5): `disable_ocr` — skip VLM OCR on image-only pages (timeout recovery)
+
+- **Not LLM-dependent** — the flag's whole point is avoiding the VLM call; runs even if the Setup LLM probe failed.
+- **Input:** `data` = `(b64 fixtures/multi-page.pdf)`, `mime_type: "application/pdf"`, `disable_ocr: true` — first-class param (no raw xberg `config` JSON needed; the wrapper merges it into `config.disable_ocr`).
+- **Invoke:** bound `extract_bytes` via `meta_use`.
+- **PASS:** valid envelope — `results` non-empty; `results[0].content` non-empty (native text layer only, no VLM/LLM call); `errors` absent (⇒ `[]`) or empty. On scanned/image-only documents the call returns fast instead of timing out.
+- **FAIL signature:** tool-level error, empty `content`, or a timeout (the default OCR path was still taken).
+- Text-layer PDF — no OCR needed; the flag must not break the normal path.
+
 ### Cleanup
 
 - Verification step — confirm the environment is still healthy after the run:
@@ -191,3 +200,4 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 | **D2** — markers false | Content contains no `<!-- PAGE` markers | No |
 | **D3** — markers default (omitted) | Documented default: no `<!-- PAGE` markers (default false) | No |
 | **D4** — singular `page` typo guard | `isError: true`, 400 "unknown field page" | No |
+| **D5** — `disable_ocr: true` | Envelope OK; content non-empty (native text layer, no VLM); fast on image-only docs | No |

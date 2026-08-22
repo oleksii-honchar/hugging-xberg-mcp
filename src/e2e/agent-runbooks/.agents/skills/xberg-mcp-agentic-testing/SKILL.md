@@ -137,7 +137,7 @@ Remote xberg tool names = opencode entry prefix `hugging-xberg_` + the LiteLLM *
    ```
    Available runbooks:
     1. transport.test.runbook.md          — MCP discovery + remote tool binding (F1–F2)
-   2. extract-bytes.test.runbook.md      — extract_bytes cases (A1–A4, B1–B4, C1–C4, D1–D4)
+   2. extract-bytes.test.runbook.md      — extract_bytes cases (A1–A4, B1–B4, C1–C4, D1–D5)
    3. extract-structured.test.runbook.md — extract_structured cases (E1–E4)
 
    All runbooks will be executed.
@@ -243,6 +243,7 @@ Related knowledge lives in the repo vault — reference by name, never copy:
 | Sending corrupted or line-wrapped base64 | Corrupted base64 produces parse errors (422-style) (`.vault/memories/0006-base64-corruption-422-errors`). Use the portable helper: `b64() { base64 < "$1" | tr -d '\n'; }`. |
 | Expecting opencode to reconnect after the stack dies | opencode never retries dead MCP connections (`.vault/memories/0004-opencode-no-retry-mcp-connection`). Confirm the remote `hugging-xberg` entry is correct, then **restart the opencode session**. |
 | Using `config.page` for page markers | The xberg config key is **plural**: `config.pages.insert_page_markers`. The singular `page` → xberg 400 `unknown field page`. |
+| Default OCR timing out on image-only pages | By default xberg OCRs scanned/image-only pages (charts) via a VLM — slow, and it can time out on chart-heavy PDFs. `extract_bytes` exposes a first-class **`disable_ocr: true`** param (merged into the xberg `config` as `disable_ocr: true`) that skips the VLM path and returns only the native text layer (fast, no LLM call). Use it for timeout recovery. |
 | Requiring the `errors` key to be present in the envelope | The `errors` key is **omitted when empty** — treat a missing `errors` as `[]`, not as a failure. |
 | Using GNU-only `base64 -w0` on macOS | macOS BSD base64 has no `-w0`. Use `b64() { base64 < "$1" | tr -d '\n'; }` — the stdin form works on both BSD and GNU. |
 

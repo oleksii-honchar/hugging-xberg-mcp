@@ -10,13 +10,15 @@ import { TOOLS } from './config.js';
 const EXPECTED_RESPONSE_FORMATS = ['json', 'toon', 'plain', 'markdown', 'djot', 'html'];
 
 /**
- * Mock McpServer that captures tool definitions instead of talking to the SDK.
+ * Mock McpServer that captures tool definitions (and the handler) instead of
+ * talking to the SDK.
  */
 function createMockMcpServer() {
   const tools = new Map();
   return {
     tools,
-    registerTool(name, definition) {
+    registerTool(name, definition, handler) {
+      if (handler) definition.handler = handler;
       tools.set(name, definition);
     },
   };
@@ -92,6 +94,29 @@ describe('tools.js extract_bytes schema', () => {
     assert.equal(parsed.success, true, 'PDF-relevant config object must parse');
   });
 
+  it('exposes disable_ocr as an optional boolean', () => {
+    const schema = shape.disable_ocr;
+    assert.ok(schema instanceof z.ZodOptional, 'disable_ocr must be optional');
+    assert.ok(schema.unwrap() instanceof z.ZodBoolean, 'disable_ocr must be a boolean');
+    assert.equal(schema.safeParse(true).success, true, 'true must be accepted');
+    assert.equal(schema.safeParse(false).success, true, 'false must be accepted');
+    assert.equal(schema.safeParse(undefined).success, true, 'undefined must be accepted (optional)');
+    assert.equal(schema.safeParse('yes').success, false, 'non-boolean must be rejected');
+  });
+
+  it('description mentions disable_ocr for timeout recovery', () => {
+    assert.match(
+      definition.description,
+      /disable_ocr/,
+      'description must mention disable_ocr',
+    );
+    assert.match(
+      definition.description,
+      /times?\s*out/i,
+      'description must mention timeout recovery',
+    );
+  });
+
   it('description mentions PDFs/documents', () => {
     assert.match(definition.description, /PDF/i, 'description must mention PDFs');
     assert.match(definition.description, /document/i, 'description must mention documents');
@@ -145,6 +170,106 @@ describe('tools.js extract_structured description', () => {
       definition.description,
       /config/i,
       'description must note config-driven implementation',
+    );
+  });
+
+  it('does NOT expose disable_ocr (structured extraction is inherently LLM-based)', () => {
+    assert.equal(
+      definition.inputSchema.shape.disable_ocr,
+      undefined,
+      'extract_structured must not expose disable_ocr',
+    );
+  });
+});
+
+describe('tools.js handleExtractBytes disable_ocr forwarding', () => {
+  /** Capture the registered handler and return it for direct invocation. */
+  function registerHandler() {
+    const server = createMockMcpServer();
+    registerTools(server);
+    const definition = server.tools.get(TOOLS.EXTRACT_BYTES);
+    assert.ok(definition.handler, 'extract_bytes handler must be captured by the mock server');
+    return definition.handler;
+  }
+
+  /** Mock global fetch, capturing the outgoing FormData body. */
+  function mockFetchReturningOk(t) {
+    let seenForm;
+    t.mock.method(globalThis, 'fetch', async (_url, init) => {
+      seenForm = init.body;
+      return new Response(JSON.stringify({ results: [], summary: 'ok' }), { status: 200 });
+    });
+    return () => seenForm;
+  }
+
+  const TINY_B64 = Buffer.from('hello').toString('base64');
+
+  it('merges { disable_ocr: true } into config, preserving existing keys', async (t) => {
+    const getForm = mockFetchReturningOk(t);
+    const handler = registerHandler();
+
+    const result = await handler({
+      data: TINY_B64,
+      mime_type: 'application/pdf',
+      config: { pages: { insert_page_markers: true } },
+      disable_ocr: true,
+    });
+
+    assert.equal(result.isError, undefined, 'handler must succeed');
+    const config = JSON.parse(getForm().get('config'));
+    assert.equal(config.disable_ocr, true, 'disable_ocr must be merged into config');
+    assert.deepEqual(
+      config.pages,
+      { insert_page_markers: true },
+      'user-supplied config keys must be preserved',
+    );
+  });
+
+  it('adds config { disable_ocr: true } when no config was supplied', async (t) => {
+    const getForm = mockFetchReturningOk(t);
+    const handler = registerHandler();
+
+    await handler({ data: TINY_B64, mime_type: 'application/pdf', disable_ocr: true });
+
+    assert.deepEqual(
+      JSON.parse(getForm().get('config')),
+      { disable_ocr: true },
+      'disable_ocr:true alone must produce the config field',
+    );
+  });
+
+  it('adds NO config field when disable_ocr is absent', async (t) => {
+    const getForm = mockFetchReturningOk(t);
+    const handler = registerHandler();
+
+    await handler({ data: TINY_B64, mime_type: 'application/pdf' });
+
+    assert.equal(getForm().get('config'), null, 'no config field may be added');
+  });
+
+  it('adds NO config field when disable_ocr is explicitly false', async (t) => {
+    const getForm = mockFetchReturningOk(t);
+    const handler = registerHandler();
+
+    await handler({ data: TINY_B64, mime_type: 'application/pdf', disable_ocr: false });
+
+    assert.equal(getForm().get('config'), null, 'falsy disable_ocr must not add config');
+  });
+
+  it('forwards user config verbatim when disable_ocr is absent', async (t) => {
+    const getForm = mockFetchReturningOk(t);
+    const handler = registerHandler();
+
+    await handler({
+      data: TINY_B64,
+      mime_type: 'application/pdf',
+      config: { pages: { insert_page_markers: true } },
+    });
+
+    assert.deepEqual(
+      JSON.parse(getForm().get('config')),
+      { pages: { insert_page_markers: true } },
+      'existing behavior: user config reaches the form unchanged',
     );
   });
 });
