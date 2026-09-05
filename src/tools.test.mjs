@@ -1,10 +1,10 @@
-import { describe, it } from 'node:test';
+import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
-import { registerTools } from './tools.js';
-import { TOOLS } from './config.js';
+import { registerTools, resolveExtractBytesConfig } from './tools.js';
+import { config, TOOLS } from './config.js';
 
 /** Expected response_format enum — extended for xberg output_format rendering. */
 const EXPECTED_RESPONSE_FORMATS = ['json', 'toon', 'plain', 'markdown', 'djot', 'html'];
@@ -104,6 +104,32 @@ describe('tools.js extract_bytes schema', () => {
     assert.equal(schema.safeParse('yes').success, false, 'non-boolean must be rejected');
   });
 
+  it('exposes ocr_engine as an optional enum auto|tesseract|paddleocr|vlm', () => {
+    const schema = shape.ocr_engine;
+    assert.ok(schema instanceof z.ZodOptional, 'ocr_engine must be optional');
+    const enumSchema = schema.unwrap();
+    assert.ok(enumSchema instanceof z.ZodEnum, 'ocr_engine must be an enum');
+    assert.deepEqual(enumSchema.options, ['auto', 'tesseract', 'paddleocr', 'vlm']);
+  });
+
+  it('accepts every ocr_engine enum value and rejects others', () => {
+    const enumSchema = shape.ocr_engine.unwrap();
+    for (const value of ['auto', 'tesseract', 'paddleocr', 'vlm']) {
+      assert.equal(enumSchema.safeParse(value).success, true, `'${value}' must be accepted`);
+    }
+    assert.equal(enumSchema.safeParse('aws_textract').success, false, 'unknown engine must be rejected');
+    assert.equal(shape.ocr_engine.safeParse(undefined).success, true, 'ocr_engine must be optional');
+  });
+
+  it('description mentions ocr_engine and the CPU-first default', () => {
+    assert.match(definition.description, /ocr_engine/, 'description must mention ocr_engine');
+    assert.match(
+      definition.description,
+      /cpu[- ]first|tesseract/i,
+      'description must surface the CPU-first default engine',
+    );
+  });
+
   it('description mentions disable_ocr for timeout recovery', () => {
     assert.match(
       definition.description,
@@ -178,6 +204,20 @@ describe('tools.js extract_structured description', () => {
       definition.inputSchema.shape.disable_ocr,
       undefined,
       'extract_structured must not expose disable_ocr',
+    );
+  });
+
+  it('exposes ocr_engine as the same enum as extract_bytes', () => {
+    const enumSchema = definition.inputSchema.shape.ocr_engine.unwrap();
+    assert.ok(enumSchema instanceof z.ZodEnum, 'ocr_engine must be an enum');
+    assert.deepEqual(enumSchema.options, ['auto', 'tesseract', 'paddleocr', 'vlm']);
+  });
+
+  it('description mentions ocr_engine', () => {
+    assert.match(
+      definition.description,
+      /ocr_engine/,
+      'extract_structured description must mention ocr_engine',
     );
   });
 });
@@ -271,6 +311,144 @@ describe('tools.js handleExtractBytes disable_ocr forwarding', () => {
       { pages: { insert_page_markers: true } },
       'existing behavior: user config reaches the form unchanged',
     );
+  });
+
+  it("injects an ocr block from ocr_engine 'tesseract' into config", async (t) => {
+    const getForm = mockFetchReturningOk(t);
+    const handler = registerHandler();
+
+    await handler({ data: TINY_B64, mime_type: 'application/pdf', ocr_engine: 'tesseract' });
+
+    assert.deepEqual(
+      JSON.parse(getForm().get('config')),
+      { ocr: { backend: 'tesseract', vlm_fallback: { mode: 'disabled' } } },
+      'ocr_engine must inject a tesseract ocr block when no user ocr config exists',
+    );
+  });
+});
+
+describe('resolveExtractBytesConfig precedence', () => {
+  // resolveExtractBytesConfig → buildOcrConfig reads shared config; save/restore
+  // the keys it touches so cases are hermetic.
+  const KEY = 'vlmOcrModel';
+  let saved;
+
+  const saveConfig = () => {
+    saved = config[KEY];
+  };
+  const restoreConfig = () => {
+    config[KEY] = saved;
+    saved = undefined;
+  };
+
+  afterEach(restoreConfig);
+
+  it("injects an ocr block from ocr_engine 'tesseract', preserving user keys", () => {
+    const result = resolveExtractBytesConfig({
+      config: { pages: { insert_page_markers: true } },
+      ocr_engine: 'tesseract',
+    });
+    assert.deepEqual(result, {
+      pages: { insert_page_markers: true },
+      ocr: { backend: 'tesseract', vlm_fallback: { mode: 'disabled' } },
+    });
+  });
+
+  it("leaves config unchanged for ocr_engine 'auto'", () => {
+    const result = resolveExtractBytesConfig({
+      config: { pages: { insert_page_markers: true } },
+      ocr_engine: 'auto',
+    });
+    assert.deepEqual(result, { pages: { insert_page_markers: true } });
+    assert.ok(!('ocr' in result), "'auto' must not inject an ocr key");
+  });
+
+  it('leaves config unchanged when ocr_engine is omitted', () => {
+    const result = resolveExtractBytesConfig({
+      config: { pages: { insert_page_markers: true } },
+    });
+    assert.deepEqual(result, { pages: { insert_page_markers: true } });
+  });
+
+  it("disable_ocr:true wins over ocr_engine — no ocr injection, disable_ocr merged", () => {
+    const result = resolveExtractBytesConfig({
+      config: { pages: { insert_page_markers: true } },
+      ocr_engine: 'tesseract',
+      disable_ocr: true,
+    });
+    assert.deepEqual(result, {
+      pages: { insert_page_markers: true },
+      disable_ocr: true,
+    });
+    assert.ok(!('ocr' in result), 'disable_ocr must suppress ocr injection');
+  });
+
+  it("user-supplied config.ocr wins over ocr_engine, verbatim, without validating the engine", () => {
+    saveConfig();
+    config[KEY] = null; // vlm would otherwise throw — must never be reached
+    const userOcr = { backend: 'vlm', vlm_config: { model: 'my-custom' } };
+    const result = resolveExtractBytesConfig({
+      config: { ocr: userOcr },
+      ocr_engine: 'vlm',
+    });
+    assert.deepEqual(result, { ocr: userOcr });
+  });
+
+  it("injects a complete vlm ocr block for ocr_engine 'vlm' when XBERG_VLM_OCR_MODEL is set", () => {
+    saveConfig();
+    config[KEY] = 'puma-qwen3.5-2b-instruct';
+    const result = resolveExtractBytesConfig({ ocr_engine: 'vlm' });
+    assert.deepEqual(result, {
+      ocr: {
+        backend: 'vlm',
+        vlm_fallback: { mode: 'disabled' },
+        vlm_config: { model: 'puma-qwen3.5-2b-instruct' },
+      },
+    });
+  });
+
+  it("throws for ocr_engine 'vlm' when XBERG_VLM_OCR_MODEL is unset", () => {
+    saveConfig();
+    config[KEY] = null;
+    assert.throws(
+      () => resolveExtractBytesConfig({ ocr_engine: 'vlm' }),
+      /ocr_engine 'vlm' requires XBERG_VLM_OCR_MODEL/,
+    );
+  });
+
+  it("treats unknown engines like omitted (no injection; server default applies)", () => {
+    const result = resolveExtractBytesConfig({
+      config: { pages: { insert_page_markers: true } },
+      ocr_engine: 'bogus',
+    });
+    assert.deepEqual(result, { pages: { insert_page_markers: true } });
+  });
+});
+
+describe('tools.js handleExtractBytes ocr_engine error surfacing', () => {
+  function registerHandler() {
+    const server = createMockMcpServer();
+    registerTools(server);
+    const definition = server.tools.get(TOOLS.EXTRACT_BYTES);
+    return definition.handler;
+  }
+
+  it("returns an isError result (not a crash) when ocr_engine 'vlm' is unconfigured", async (t) => {
+    const saved = config.vlmOcrModel;
+    config.vlmOcrModel = null;
+    const handler = registerHandler();
+
+    try {
+      const result = await handler({
+        data: Buffer.from('hello').toString('base64'),
+        mime_type: 'application/pdf',
+        ocr_engine: 'vlm',
+      });
+      assert.equal(result.isError, true, 'unconfigured vlm must surface as an MCP error result');
+      assert.match(result.content[0].text, /ocr_engine 'vlm' requires XBERG_VLM_OCR_MODEL/);
+    } finally {
+      config.vlmOcrModel = saved;
+    }
   });
 });
 

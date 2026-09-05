@@ -218,7 +218,7 @@ Conventions that apply to every runbook. Treat these as hard rules, not suggesti
 - **Fixtures:** reuse `fixtures/test-image.png` and `fixtures/multi-page.pdf` (read-only repo assets, resolved from repo root).
 - **Portable base64 helper** (macOS BSD + GNU Linux): `b64() { base64 < "$1" | tr -d '\n'; }`
 - **Envelope assertions:** parse the tool's text result as JSON; the `errors` key is **omitted when empty** — treat missing as `[]`.
-- **OCR content assertions:** shape-based (envelope + non-empty), never exact text — VLM output is non-deterministic.
+- **OCR content assertions:** the default OCR engine is **CPU Tesseract** (deterministic on clean pages — exact-text assertions are viable). For the VLM-fallback / explicit-`ocr_engine=vlm` path, use **shape-based** (envelope + non-empty) — VLM output is non-deterministic.
 - **Secrets:** `$LITELLM_API_KEY` from env / repo `.env`; never in runbook text.
 - **Cleanup:** no fixture teardown; each runbook carries a verification step (stack still healthy after the run).
 
@@ -243,7 +243,7 @@ Related knowledge lives in the repo vault — reference by name, never copy:
 | Sending corrupted or line-wrapped base64 | Corrupted base64 produces parse errors (422-style) (`.vault/memories/0006-base64-corruption-422-errors`). Use the portable helper: `b64() { base64 < "$1" | tr -d '\n'; }`. |
 | Expecting opencode to reconnect after the stack dies | opencode never retries dead MCP connections (`.vault/memories/0004-opencode-no-retry-mcp-connection`). Confirm the remote `hugging-xberg` entry is correct, then **restart the opencode session**. |
 | Using `config.page` for page markers | The xberg config key is **plural**: `config.pages.insert_page_markers`. The singular `page` → xberg 400 `unknown field page`. |
-| Default OCR timing out on image-only pages | By default xberg OCRs scanned/image-only pages (charts) via a VLM — slow, and it can time out on chart-heavy PDFs. `extract_bytes` exposes a first-class **`disable_ocr: true`** param (merged into the xberg `config` as `disable_ocr: true`) that skips the VLM path and returns only the native text layer (fast, no LLM call). Use it for timeout recovery. |
+| Default OCR timing out on image-only pages | By default, xberg OCRs scanned/image-only pages with **CPU Tesseract**; a VLM is used only on low-quality fallback (quality score < 0.5) or when the client explicitly passes `ocr_engine=vlm`. The `ocr_engine` parameter (`auto`/`tesseract`/`paddleocr`/`vlm`) lets callers pin the OCR engine explicitly. `extract_bytes` also exposes a first-class **`disable_ocr: true`** param (merged into the xberg `config` as `disable_ocr: true`) that skips OCR entirely and returns only the native text layer (fast, no LLM call). Use it for timeout recovery. |
 | Requiring the `errors` key to be present in the envelope | The `errors` key is **omitted when empty** — treat a missing `errors` as `[]`, not as a failure. |
 | Using GNU-only `base64 -w0` on macOS | macOS BSD base64 has no `-w0`. Use `b64() { base64 < "$1" | tr -d '\n'; }` — the stdin form works on both BSD and GNU. |
 

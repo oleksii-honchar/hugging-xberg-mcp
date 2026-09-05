@@ -132,6 +132,64 @@ else
   fail "extract_bytes (curl failed or no result.content: $RESPONSE)"
 fi
 
+# ── Check 4b: ocr_engine knob (spec §7.4) ───────────────────────────────────
+echo ""
+echo "=== Check: ocr_engine knob ==="
+
+# 4b-1: ocr_engine=tesseract
+cyan_info "Calling extract_bytes with ocr_engine=tesseract ..."
+RESPONSE=$(curl -sf -s -X POST "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"extract_bytes\",\"arguments\":{\"data\":\"$TEST_DATA\",\"mime_type\":\"image/png\",\"ocr_engine\":\"tesseract\"}}}")
+if [ $? -eq 0 ] && printf '%s\n' "$RESPONSE" | unwrap_sse | jq -e '.result.content' > /dev/null 2>&1; then
+  HAS_TEXT=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq '[.result.content[] | select(.type == "text")] | length')
+  IS_ERROR=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq '.result | .isError // false')
+  if [ "$HAS_TEXT" -gt 0 ] && [ "$IS_ERROR" = "false" ]; then
+    pass "extract_bytes ocr_engine=tesseract"
+  else
+    fail "extract_bytes ocr_engine=tesseract (no text content or isError=true)"
+  fi
+else
+  fail "extract_bytes ocr_engine=tesseract (curl failed or no result.content: $RESPONSE)"
+fi
+
+# 4b-2: ocr_engine=vlm
+cyan_info "Calling extract_bytes with ocr_engine=vlm ..."
+RESPONSE=$(curl -sf -s -X POST "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"extract_bytes\",\"arguments\":{\"data\":\"$TEST_DATA\",\"mime_type\":\"image/png\",\"ocr_engine\":\"vlm\"}}}")
+if [ $? -eq 0 ] && printf '%s\n' "$RESPONSE" | unwrap_sse | jq -e '.result.content' > /dev/null 2>&1; then
+  HAS_TEXT=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq '[.result.content[] | select(.type == "text")] | length')
+  IS_ERROR=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq '.result | .isError // false')
+  if [ "$HAS_TEXT" -gt 0 ] && [ "$IS_ERROR" = "false" ]; then
+    pass "extract_bytes ocr_engine=vlm"
+  else
+    fail "extract_bytes ocr_engine=vlm (no text content or isError=true)"
+  fi
+else
+  fail "extract_bytes ocr_engine=vlm (curl failed or no result.content: $RESPONSE)"
+fi
+
+# 4b-3: disable_ocr + ocr_engine=vlm (no OCR)
+cyan_info "Calling extract_bytes with disable_ocr + ocr_engine=vlm ..."
+RESPONSE=$(curl -sf -s -X POST "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"extract_bytes\",\"arguments\":{\"data\":\"$TEST_DATA\",\"mime_type\":\"image/png\",\"disable_ocr\":true,\"ocr_engine\":\"vlm\"}}}")
+if [ $? -eq 0 ] && printf '%s\n' "$RESPONSE" | unwrap_sse | jq -e '.result.content' > /dev/null 2>&1; then
+  HAS_TEXT=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq '[.result.content[] | select(.type == "text")] | length')
+  IS_ERROR=$(printf '%s\n' "$RESPONSE" | unwrap_sse | jq '.result | .isError // false')
+  if [ "$HAS_TEXT" -gt 0 ] && [ "$IS_ERROR" = "false" ]; then
+    pass "extract_bytes disable_ocr + ocr_engine=vlm (no OCR)"
+  else
+    fail "extract_bytes disable_ocr+ocr_engine=vlm (no text content or isError=true)"
+  fi
+else
+  fail "extract_bytes disable_ocr+ocr_engine=vlm (curl failed or no result.content: $RESPONSE)"
+fi
+
 # ── Check 5: extract_structured tool call (fixture PNG) ─────────────────────
 echo ""
 echo "=== Check: extract_structured ==="

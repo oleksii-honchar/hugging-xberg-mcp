@@ -1,4 +1,10 @@
-import { extractBase64, extractBytes, extractStructured } from './xberg-client.js';
+import {
+  extractBase64,
+  extractBytes,
+  extractStructured,
+  buildOcrConfig,
+  buildStructuredConfig,
+} from './xberg-client.js';
 import { config } from './config.js';
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -292,6 +298,87 @@ describe('extractStructured outbound request', () => {
     assert.equal(result.status, 400);
     assert.match(result.error, /Xberg error \(400\): bad request/);
   });
+
+  it("merges an ocr block alongside structured_extraction for ocrEngine 'tesseract'", async () => {
+    mock = mockFetch(okResponse);
+    const data = Buffer.from('hello world').toString('base64');
+
+    await extractStructured(data, 'tesseract');
+
+    const configJson = JSON.parse(mock.calls[0].body.get('config'));
+    assert.ok(configJson.structured_extraction, 'config must still carry structured_extraction');
+    assert.deepEqual(configJson.ocr, {
+      backend: 'tesseract',
+      vlm_fallback: { mode: 'disabled' },
+    });
+  });
+
+  it("does not inject an ocr block when ocrEngine is omitted (server default applies)", async () => {
+    mock = mockFetch(okResponse);
+    const data = Buffer.from('hello world').toString('base64');
+
+    await extractStructured(data);
+
+    const configJson = JSON.parse(mock.calls[0].body.get('config'));
+    assert.ok(configJson.structured_extraction, 'config must still carry structured_extraction');
+    assert.ok(!('ocr' in configJson), "ocr key must be absent when ocrEngine is omitted");
+  });
+
+  it("does not inject an ocr block when ocrEngine is 'auto' (server default applies)", async () => {
+    mock = mockFetch(okResponse);
+    const data = Buffer.from('hello world').toString('base64');
+
+    await extractStructured(data, 'auto');
+
+    const configJson = JSON.parse(mock.calls[0].body.get('config'));
+    assert.ok(configJson.structured_extraction, 'config must still carry structured_extraction');
+    assert.ok(!('ocr' in configJson), "ocr key must be absent when ocrEngine is 'auto'");
+  });
+
+  it("injects a complete vlm ocr block when ocrEngine is 'vlm' and XBERG_VLM_OCR_MODEL is configured", async () => {
+    mock = mockFetch(okResponse);
+    const saved = { vlm: config.vlmOcrModel, base: config.structuredBaseUrl, key: config.structuredApiKey };
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+    config.structuredBaseUrl = 'http://localhost:4000';
+    config.structuredApiKey = 'sk-test-123';
+    const data = Buffer.from('hello world').toString('base64');
+
+    try {
+      await extractStructured(data, 'vlm');
+
+      const configJson = JSON.parse(mock.calls[0].body.get('config'));
+      assert.deepEqual(configJson.ocr, {
+        backend: 'vlm',
+        vlm_fallback: { mode: 'disabled' },
+        vlm_config: {
+          model: 'puma-qwen3.5-2b-instruct',
+          base_url: 'http://localhost:4000',
+          api_key: 'sk-test-123',
+        },
+      });
+    } finally {
+      config.vlmOcrModel = saved.vlm;
+      config.structuredBaseUrl = saved.k;
+      config.structuredApiKey = saved.key;
+    }
+  });
+
+  it("throws (surfaced to tool layer) when ocrEngine 'vlm' is selected but XBERG_VLM_OCR_MODEL is unset", async () => {
+    mock = mockFetch(okResponse);
+    const saved = config.vlmOcrModel;
+    config.vlmOcrModel = null;
+    const data = Buffer.from('hello world').toString('base64');
+
+    try {
+      await assert.rejects(
+        () => extractStructured(data, 'vlm'),
+        /ocr_engine 'vlm' requires XBERG_VLM_OCR_MODEL/,
+      );
+      assert.equal(mock.calls.length, 0, 'no request must be sent when vlm config is impossible');
+    } finally {
+      config.vlmOcrModel = saved;
+    }
+  });
 });
 
 describe('PDF fixture passthrough (integration-style unit test)', () => {
@@ -360,5 +447,97 @@ describe('PDF fixture passthrough (integration-style unit test)', () => {
       { pages: { insert_page_markers: true } },
       'config must reach xberg verbatim',
     );
+  });
+});
+
+describe('buildOcrConfig', () => {
+  // buildOcrConfig reads from the shared config object; mutate + restore per test
+  // so cases are hermetic and do not leak into other suites.
+  const KEYS = ['vlmOcrModel', 'structuredBaseUrl', 'structuredApiKey'];
+  let saved;
+
+  afterEach(() => {
+    for (const k of KEYS) config[k] = saved[k];
+    saved = null;
+  });
+
+  const saveConfig = () => {
+    saved = {};
+    for (const k of KEYS) saved[k] = config[k];
+  };
+
+  it('returns null for undefined (no injection; server default applies)', () => {
+    saveConfig();
+    assert.equal(buildOcrConfig(undefined), null);
+  });
+
+  it("returns null for 'auto' (no injection; server default applies)", () => {
+    saveConfig();
+    assert.equal(buildOcrConfig('auto'), null);
+  });
+
+  it("returns tesseract backend config with disabled vlm_fallback for 'tesseract'", () => {
+    saveConfig();
+    assert.deepEqual(buildOcrConfig('tesseract'), {
+      backend: 'tesseract',
+      vlm_fallback: { mode: 'disabled' },
+    });
+  });
+
+  it("returns paddleocr backend config with disabled vlm_fallback for 'paddleocr'", () => {
+    saveConfig();
+    assert.deepEqual(buildOcrConfig('paddleocr'), {
+      backend: 'paddleocr',
+      vlm_fallback: { mode: 'disabled' },
+    });
+  });
+
+  it("returns complete vlm_config (model, base_url, api_key) for 'vlm' when all configured", () => {
+    saveConfig();
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+    config.structuredBaseUrl = 'http://localhost:4000';
+    config.structuredApiKey = 'sk-test-123';
+
+    const result = buildOcrConfig('vlm');
+
+    assert.deepEqual(result, {
+      backend: 'vlm',
+      vlm_fallback: { mode: 'disabled' },
+      vlm_config: {
+        model: 'puma-qwen3.5-2b-instruct',
+        base_url: 'http://localhost:4000',
+        api_key: 'sk-test-123',
+      },
+    });
+  });
+
+  it("throws the exact XBERG_VLM_OCR_MODEL config error for 'vlm' when vlmOcrModel is null", () => {
+    saveConfig();
+    config.vlmOcrModel = null;
+
+    assert.throws(
+      () => buildOcrConfig('vlm'),
+      new Error("ocr_engine 'vlm' requires XBERG_VLM_OCR_MODEL to be set on the wrapper"),
+    );
+  });
+
+  it("omits api_key for 'vlm' when structuredApiKey is null (model + base_url present)", () => {
+    saveConfig();
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+    config.structuredBaseUrl = 'http://localhost:4000';
+    config.structuredApiKey = null;
+
+    const result = buildOcrConfig('vlm');
+
+    assert.equal(result.backend, 'vlm');
+    assert.deepEqual(result.vlm_fallback, { mode: 'disabled' });
+    assert.equal(result.vlm_config.model, 'puma-qwen3.5-2b-instruct');
+    assert.equal(result.vlm_config.base_url, 'http://localhost:4000');
+    assert.ok(!('api_key' in result.vlm_config), 'api_key must be absent when structuredApiKey is null');
+  });
+
+  it("returns null for unknown/invalid engine values (defensive; server default applies)", () => {
+    saveConfig();
+    assert.equal(buildOcrConfig('bogus'), null);
   });
 });

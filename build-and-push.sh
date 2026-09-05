@@ -47,10 +47,18 @@ PLATFORM="linux/amd64,linux/arm64"
 # ── Parse flags ────────────────────────────────────────────────────────────────
 while [ $# -gt 0 ]; do
   case "$1" in
-    --build-only) BUILD_ONLY=true ;;
-    --push-only)  PUSH_ONLY=true ;;
-    --dry-run)    DRY_RUN=true ;;
-    --no-cache)   NO_CACHE=true ;;
+    --build-only) BUILD_ONLY=true
+      shift
+      ;;
+    --push-only)  PUSH_ONLY=true
+      shift
+      ;;
+    --dry-run)    DRY_RUN=true
+      shift
+      ;;
+    --no-cache)   NO_CACHE=true
+      shift
+      ;;
     --tag)
       TAG="$2"
       shift 2

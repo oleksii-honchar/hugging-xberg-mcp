@@ -6,15 +6,15 @@
 
 ### Test Objective
 
-Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1–C4, D1–D5): basic extraction from images and PDFs, VLM-OCR paths, error/edge paths, and config-flag behavior (page markers + the singular-`page` typo guard + the `disable_ocr` timeout-recovery flag).
+Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1–C4, D1–D5): basic extraction from images and PDFs, OCR paths (default CPU Tesseract; VLM only on low-quality fallback or explicit `ocr_engine=vlm`), error/edge paths, and config-flag behavior (page markers + the singular-`page` typo guard + the `disable_ocr` timeout-recovery flag).
 
 > **Remote target:** steps reference the **bound tool** — the remote `extract_bytes` confirmed at Setup (`hugging-xberg_hugging_xberg-extract_bytes`; opencode prefixes by entry name `hugging-xberg_` + LiteLLM upstream server `hugging_xberg`). Confirm the exact remote name at Setup; never hardcode a bare name.
 >
 > **Envelope convention:** parse the tool's text result as JSON — `{results, errors, summary}`. The `errors` key is **omitted when empty** — treat a missing `errors` as `[]`.
 >
-> **OCR content assertions:** shape-based only (envelope present + content non-empty) — **never** exact text, since VLM output is non-deterministic.
+> **OCR content assertions:** the default OCR engine is **CPU Tesseract** (deterministic on clean pages — exact-text assertions are viable). For the VLM-fallback / explicit-`ocr_engine=vlm` path, use **shape-based** (envelope + non-empty) — VLM output is non-deterministic.
 >
-> **LLM Setup Prerequisite (ADR-014):** the Setup LLM probe (one cheap structured/OCR call) decides LLM-dependent cases. Probe **succeeded** → all cases run. Probe **failed** → mark LLM-dependent cases **BLOCKED (LLM config)** and report the exact vars to fix (`XBERG_LLM_BASE_URL`, `ocr.vlm_config.base_url`, `LITELLM_API_KEY`); non-LLM cases still run.
+> **LLM Setup Prerequisite (ADR-014):** the Setup LLM probe (one cheap structured/OCR call) confirms VLM reachability. Since the default OCR engine is now **CPU Tesseract**, OCR cases in this runbook do **not** require the VLM and can **PASS even when the probe fails**. The LLM probe gates only cases that explicitly use `ocr_engine=vlm` or a confirmed low-quality VLM fallback — report the exact vars to fix (`XBERG_LLM_BASE_URL`, `ocr.vlm_config.base_url`, `LITELLM_API_KEY`) if such cases are blocked.
 
 ### Prerequisites
 
@@ -26,7 +26,7 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 - Portable base64 helper (macOS BSD + GNU Linux) for payload computation in bash:
   - `b64() { base64 < "$1" | tr -d '\n'; }`
   - Resolve `fixtures/` from the repo root (`cd` there first if needed).
-- Setup LLM probe status is recorded (ADR-014) — it gates the B cases (and the A1/A3 OCR paths).
+- Setup LLM probe status is recorded (ADR-014) — it gates only cases that explicitly use `ocr_engine=vlm` or a confirmed VLM fallback; default-OCR (CPU Tesseract) cases run regardless.
 
 ### Test Steps
 
@@ -36,7 +36,7 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 - **Invoke:** bound `extract_bytes` via `meta_use`.
 - **PASS:** valid envelope — JSON with `results` non-empty; `results[0].content` non-empty (extracted text from the image); `errors` absent (⇒ `[]`) or empty.
 - **FAIL signature:** connection-layer failure, or empty `results`/`content`, or non-empty `errors`.
-- **LLM-dependent:** image OCR runs through the VLM backend — if the Setup LLM probe **failed**, mark **BLOCKED (LLM config)** instead of FAIL.
+- **LLM-dependent:** the default OCR engine is **CPU Tesseract** (no VLM needed for clean pages) — this case can **PASS even when the Setup LLM probe fails**.
 
 #### Step 2 (A2): multi-page PDF — page count matches
 
@@ -53,7 +53,7 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 - **Invoke:** bound `extract_bytes` via `meta_use`.
 - **PASS:** valid envelope — `results` non-empty; `results[0].content` non-empty; `errors` absent (⇒ `[]`) or empty.
 - **FAIL signature:** 422-style error "cannot extract attachment data from URI" (attachment not resolvable — temp file cleaned up or URI not the real injected one), or empty content.
-- **LLM-dependent:** PNG OCR via VLM — if the Setup LLM probe **failed**, mark **BLOCKED (LLM config)**.
+- **LLM-dependent:** PNG OCR uses the default **CPU Tesseract** engine (no VLM needed for clean pages) — this case can **PASS even when the Setup LLM probe fails**.
 
 #### Step 4 (A4): text-layer PDF — extraction without OCR
 
@@ -65,7 +65,7 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 
 #### Step 5 (B1): OCR — PNG via data URL (shape-based)
 
-- **LLM-dependent (OCR):** **BLOCKED (LLM config)** if the Setup LLM probe failed.
+- **LLM-dependent (OCR):** the default OCR engine is **CPU Tesseract** (no VLM needed for clean pages) — this case can **PASS even when the Setup LLM probe fails**.
 - **Input:** `data` = `data:image/png;base64,` + `(b64 fixtures/test-image.png)` — full data URL form.
 - **Invoke:** bound `extract_bytes` via `meta_use`.
 - **PASS (shape-based):** valid envelope — `results` non-empty; `results[0].content` non-empty (OCR produced text); `errors` absent (⇒ `[]`) or empty. Never assert exact text.
@@ -73,15 +73,15 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 
 #### Step 6 (B2): OCR — forced page OCR via `force_ocr_pages` (shape-based)
 
-- **LLM-dependent (OCR):** **BLOCKED (LLM config)** if the Setup LLM probe failed.
-- **Input:** `data` = `(b64 fixtures/multi-page.pdf)`, `mime_type: "application/pdf"`, `config: {"force_ocr_pages": [1]}` — force VLM OCR on page 1.
+- **LLM-dependent (OCR):** the default OCR engine is **CPU Tesseract** (no VLM needed for clean pages) — this case can **PASS even when the Setup LLM probe fails**.
+- **Input:** `data` = `(b64 fixtures/multi-page.pdf)`, `mime_type: "application/pdf"`, `config: {"force_ocr_pages": [1]}` — force OCR on page 1 (Tesseract backend).
 - **Invoke:** bound `extract_bytes` via `meta_use`.
 - **PASS (shape-based):** valid envelope — `results` non-empty; `results[0].content` non-empty; `errors` absent (⇒ `[]`) or empty.
 - **FAIL signature:** structured error (4xx) or empty `content` when the probe succeeded.
 
 #### Step 7 (B3): OCR — PNG via toon rendering (shape-based)
 
-- **LLM-dependent (OCR):** **BLOCKED (LLM config)** if the Setup LLM probe failed.
+- **LLM-dependent (OCR):** the default OCR engine is **CPU Tesseract** (no VLM needed for clean pages) — this case can **PASS even when the Setup LLM probe fails**.
 - **Input:** `data` = `(b64 fixtures/test-image.png)`, `mime_type: "image/png"`, `response_format: "toon"`.
 - **Invoke:** bound `extract_bytes` via `meta_use`.
 - **PASS (shape-based):** the tool returns **non-empty toon-rendered text** (not the JSON envelope) with no tool-level error — OCR content present in rendering form. Never assert exact text.
@@ -89,7 +89,7 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 
 #### Step 8 (B4): OCR — PNG via plain rendering (shape-based)
 
-- **LLM-dependent (OCR):** **BLOCKED (LLM config)** if the Setup LLM probe failed.
+- **LLM-dependent (OCR):** the default OCR engine is **CPU Tesseract** (no VLM needed for clean pages) — this case can **PASS even when the Setup LLM probe fails**.
 - **Input:** `data` = `(b64 fixtures/test-image.png)`, `mime_type: "image/png"`, `response_format: "plain"`.
 - **Invoke:** bound `extract_bytes` via `meta_use`.
 - **PASS (shape-based):** the tool returns **non-empty plain text** (content rendering, not the JSON envelope) with no tool-level error. Never assert exact text.
@@ -166,7 +166,7 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 
 #### Step 17 (D5): `disable_ocr` — skip VLM OCR on image-only pages (timeout recovery)
 
-- **Not LLM-dependent** — the flag's whole point is avoiding the VLM call; runs even if the Setup LLM probe failed.
+- **Not LLM-dependent** — the flag's whole point is avoiding OCR (CPU Tesseract default) and any VLM call; runs even if the Setup LLM probe failed.
 - **Input:** `data` = `(b64 fixtures/multi-page.pdf)`, `mime_type: "application/pdf"`, `disable_ocr: true` — first-class param (no raw xberg `config` JSON needed; the wrapper merges it into `config.disable_ocr`).
 - **Invoke:** bound `extract_bytes` via `meta_use`.
 - **PASS:** valid envelope — `results` non-empty; `results[0].content` non-empty (native text layer only, no VLM/LLM call); `errors` absent (⇒ `[]`) or empty. On scanned/image-only documents the call returns fast instead of timing out.
@@ -175,30 +175,30 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 
 #### Step 18 (D6): `disable_ocr` on PNG — empty content (no text layer)
 
-- **Not LLM-dependent** — the flag skips VLM OCR; runs even if the Setup LLM probe failed.
+- **Not LLM-dependent** — the flag skips OCR (CPU Tesseract default) and any VLM call; runs even if the Setup LLM probe failed.
 - **Input:** `data` = `(b64 fixtures/test-image.png)`, `mime_type: "image/png"`, `disable_ocr: true`.
 - **Invoke:** bound `extract_bytes` via `meta_use`.
 - **PASS:** valid envelope — `results` non-empty; `results[0].content` **empty or very short** (images have no native text layer; no OCR was performed); `errors` absent (⇒ `[]`) or empty. **Fast response** (no LLM call).
-- **FAIL signature:** tool-level error, or a timeout (the flag was ignored and VLM OCR was still attempted).
-- **Contrast test:** compare with B1 (same PNG, no `disable_ocr`) — B1 uses VLM and returns OCR text (LLM-dependent); D6 skips VLM and returns empty (fast).
+- **FAIL signature:** tool-level error, or a timeout (the flag was ignored and OCR — CPU Tesseract default — was still attempted).
+- **Contrast test:** compare with B1 (same PNG, no `disable_ocr`) — B1 uses the default OCR (CPU Tesseract) and returns OCR text; D6 skips OCR and returns empty (fast).
 
 #### Step 19 (D7): OCR vs `disable_ocr` comparison — same PDF, both modes
 
-- **LLM-dependent for OCR path** — D7a uses default OCR (LLM); D7b uses `disable_ocr` (no LLM).
+- **LLM-dependent for OCR path** — D7a uses default OCR (CPU Tesseract); D7b uses `disable_ocr` (no OCR).
 - **D7a — OCR enabled (default):**
   - **Input:** `data` = `(b64 fixtures/multi-page.pdf)`, `mime_type: "application/pdf"` — no `disable_ocr` param.
   - **Invoke:** bound `extract_bytes` via `meta_use`.
-  - **PASS (LLM-dependent):** valid envelope — `results` non-empty; `results[0].content` non-empty; `errors` absent (⇒ `[]`) or empty.
-  - **FAIL signature:** empty `content` or non-empty `errors` when LLM is available.
-  - **BLOCKED (LLM config)** if the Setup LLM probe failed.
+  - **PASS:** valid envelope — `results` non-empty; `results[0].content` non-empty; `errors` absent (⇒ `[]`) or empty.
+  - **FAIL signature:** empty `content` or non-empty `errors`.
+  - Default OCR uses **CPU Tesseract** — can **PASS even when the Setup LLM probe fails**.
 
 - **D7b — OCR disabled:**
   - **Input:** `data` = `(b64 fixtures/multi-page.pdf)`, `mime_type: "application/pdf"`, `disable_ocr: true`.
   - **Invoke:** bound `extract_bytes` via `meta_use`.
-  - **PASS:** valid envelope — `results` non-empty; `results[0].content` non-empty (native text layer, no VLM); `errors` absent (⇒ `[]`) or empty. **Fast response**.
+  - **PASS:** valid envelope — `results` non-empty; `results[0].content` non-empty (native text layer, no OCR); `errors` absent (⇒ `[]`) or empty. **Fast response**.
   - **FAIL signature:** tool-level error, empty `content`, or timeout.
 
-- **Comparison assertion:** Both D7a and D7b should succeed on a text-layer PDF. D7b is faster (no LLM). On scanned/image-only PDFs, D7a would use VLM OCR (slow) while D7b returns only the native text layer (fast, possibly empty).
+- **Comparison assertion:** Both D7a and D7b should succeed on a text-layer PDF. D7b is faster (no OCR). On scanned/image-only PDFs, D7a would use OCR (default CPU Tesseract, VLM fallback on low quality) while D7b returns only the native text layer (fast, possibly empty).
 
 ### Cleanup
 
@@ -211,14 +211,14 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 
 | Case | PASS signature | LLM-dependent? |
 |------|----------------|----------------|
-| **A1** — PNG raw base64 | Envelope OK; `results` non-empty; `results[0].content` non-empty; no `errors` | Yes (VLM OCR) |
+| **A1** — PNG raw base64 | Envelope OK; `results` non-empty; `results[0].content` non-empty; no `errors` | No (CPU Tesseract OCR) |
 | **A2** — multi-page PDF | Envelope OK; `results[0].counts.pages` = 2; content non-empty | No (text layer) |
-| **A3** — LIVE attachment URI | Envelope OK; content non-empty (user attaches image in chat; opencode injects the URI) | Yes (LIVE + VLM OCR) |
+| **A3** — LIVE attachment URI | Envelope OK; content non-empty (user attaches image in chat; opencode injects the URI) | No (LIVE + CPU Tesseract OCR) |
 | **A4** — text-layer PDF | Envelope OK; content non-empty (no OCR) | No (text layer) |
-| **B1** — PNG data URL OCR | Envelope OK; content non-empty (shape-based) | **Yes — BLOCKED if probe failed** |
-| **B2** — `force_ocr_pages` OCR | Envelope OK; content non-empty (shape-based) | **Yes — BLOCKED if probe failed** |
-| **B3** — PNG toon OCR | Non-empty toon rendering, no tool error (shape-based) | **Yes — BLOCKED if probe failed** |
-| **B4** — PNG plain OCR | Non-empty plain rendering, no tool error (shape-based) | **Yes — BLOCKED if probe failed** |
+| **B1** — PNG data URL OCR | Envelope OK; content non-empty (shape-based) | No (CPU Tesseract OCR) |
+| **B2** — `force_ocr_pages` OCR | Envelope OK; content non-empty (shape-based) | No (CPU Tesseract OCR) |
+| **B3** — PNG toon OCR | Non-empty toon rendering, no tool error (shape-based) | No (CPU Tesseract OCR) |
+| **B4** — PNG plain OCR | Non-empty plain rendering, no tool error (shape-based) | No (CPU Tesseract OCR) |
 | **C1** — unsupported file type | `isError: true`, 422-style unsupported-format error | No — **always run** |
 | **C2** — invalid/empty base64 | `isError: true`, structured missing/invalid-data error | No — **always run** |
 | **C3** — malformed config | `isError: true`, 400-style config-validation error | No — **always run** |
@@ -229,4 +229,4 @@ Verify the **bound `extract_bytes` tool** end-to-end (cases A1–A4, B1–B4, C1
 | **D4** — singular `page` typo guard | `isError: true`, 400 "unknown field page" | No |
 | **D5** — `disable_ocr: true` (PDF) | Envelope OK; content non-empty (native text layer, no VLM); fast on image-only docs | No |
 | **D6** — `disable_ocr: true` (PNG) | Envelope OK; content empty/short (no text layer in images, no OCR); **fast** (no LLM) | No |
-| **D7** — OCR vs disable_ocr comparison | D7a (OCR): content non-empty (LLM-dependent); D7b (disable_ocr): content non-empty, fast; both succeed on text-layer PDFs | **Partial — D7a yes, D7b no** |
+| **D7** — OCR vs disable_ocr comparison | D7a (OCR): content non-empty (CPU Tesseract default); D7b (disable_ocr): content non-empty, fast; both succeed on text-layer PDFs | No (D7a CPU Tesseract, D7b disable_ocr) |

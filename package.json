@@ -1,6 +1,6 @@
 {
   "name": "hugging-xberg-mcp",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Wrapper MCP server for Xberg — exposes extract_bytes and extract_structured locally, delegates to remote Xberg via MCP",
   "type": "module",
   "main": "src/mcp-server.mjs",

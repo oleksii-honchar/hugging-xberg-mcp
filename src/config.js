@@ -35,6 +35,7 @@ export const config = {
   structuredApiKey: process.env.LITELLM_API_KEY ?? null,
   structuredModel: process.env.XBERG_LLM_MODEL ?? null,
   structuredBaseUrl: process.env.XBERG_LLM_BASE_URL ?? null,
+  vlmOcrModel: process.env.XBERG_VLM_OCR_MODEL ?? null,
 };
 
 /** Tool names — single source of truth. */

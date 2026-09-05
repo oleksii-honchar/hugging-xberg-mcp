@@ -1,11 +1,17 @@
-# Xberg configuration — VLM OCR only.
+# Xberg configuration — CPU-first OCR with quality-based VLM fallback.
 # Loaded by the xberg engine starting from /app.
-# Structured extraction LLM config is set via XBERG_LLM_* env vars.
-# VLM OCR api_key is set via XBERG_LLM_API_KEY env var.
+# NOTE: the VLM OCR model is defined HERE (single source of truth).
+# api_key/base_url are still overridable via XBERG_LLM_API_KEY / XBERG_LLM_BASE_URL env
+# (xberg serve forwards those onto ocr.vlm_config).
 
 [ocr]
-backend = "vlm"
+backend = "tesseract"
+language = ["eng", "ukr", "spa"]  # Tesseract codes: ukr=Ukrainian, spa=Spanish
+
+[ocr.vlm_fallback]
+mode = "on_low_quality"
+quality_threshold = 0.5
 
 [ocr.vlm_config]
-model = "puma-qwopus3.5-9b-instruct"
+model = "puma-qwen3.5-2b-instruct"
 base_url = "http://lite-llm:4000/v1"

@@ -17,6 +17,8 @@ Verify the **bound `extract_structured` tool** end-to-end (cases E1–E4): basic
 > **Structured content assertions:** shape-based only (envelope present + structured result non-empty / nested present) — **never** exact field values, since VLM output is non-deterministic.
 >
 > **LLM Setup Prerequisite (ADR-014):** the Setup LLM probe (one cheap structured/OCR call) decides the LLM-dependent cases (E1–E3 — every successful structured extraction calls the VLM). Probe **succeeded** → E1–E3 run. Probe **failed** → mark E1–E3 **BLOCKED (LLM config)** and report the exact vars to fix (`XBERG_LLM_BASE_URL`, `ocr.vlm_config.base_url`, `LITELLM_API_KEY`, model). E4 is an input-validation error and is **NOT** LLM-dependent — it always runs.
+>
+> **Note:** Structured extraction always uses the VLM/LLM to fill the schema — independent of the OCR-engine change. The default OCR engine is now CPU Tesseract, but that only affects image-page text extraction (`extract_bytes`), not structured extraction (`extract_structured`).
 
 ### Prerequisites
 

@@ -2,7 +2,7 @@
 type: runbook
 title: "Deploy hugging-xberg-mcp Stack (Docker Compose + LiteLLM)"
 createdAt: "2026-08-21T10:59:18Z"
-updatedAt: "2026-08-21T10:59:18Z"
+updatedAt: "2026-09-05T11:30:01Z"
 tags: [operations, deployment, docker, litellm]
 see_also: ["architectures/hugging-xberg-mcp/containers/0001-system-container.container.md", "runbooks/0001-restart-mcp-stack-puma.runbook.md", "adrs/0001-raise-body-limit.adr.md", "adrs/0004-structured-extraction-via-config.adr.md"]
 deprecated:
@@ -32,7 +32,7 @@ Deployment of the two-service stack (xberg backend + MCP wrapper) on the `puma-n
 | `LITELLM_API_KEY` | API key for LLM (structured extraction + Xberg VLM OCR) | — |
 | `XBERG_LLM_BASE_URL` | LLM base URL for structured extraction | — |
 | `XBERG_LLM_MODEL` | LLM model for structured extraction | — |
-| `XBERG_VLM_OCR_MODEL` | VLM OCR model for Xberg (consumed by the xberg container, not the wrapper) | — |
+| `XBERG_VLM_OCR_MODEL` | VLM OCR model — consumed by the wrapper for `ocr_engine=vlm`; the xberg engine reads its OCR model from xberg.toml | — |
 | `HUGGING_XBERG_STRUCTURED_SCHEMA_NAME` | Schema name for structured extraction | `extraction` |
 | `HUGGING_XBERG_STRUCTURED_SCHEMA_DESCRIPTION` | Schema description | — |
 | `HUGGING_XBERG_STRUCTURED_PROMPT` | Custom prompt | — |
@@ -50,7 +50,7 @@ services:
   xberg:
     image: ghcr.io/xberg-io/xberg:1.0.14
     environment:
-      - XBERG_VLM_OCR_MODEL=${XBERG_VLM_OCR_MODEL}
+      # OCR model configured in xberg.toml (single source of truth)
       - XBERG_LLM_BASE_URL=http://lite-llm:4000/v1
       - XBERG_LLM_MODEL=${XBERG_LLM_MODEL}
       - XBERG_LLM_API_KEY=${LITELLM_API_KEY}
@@ -59,10 +59,12 @@ services:
 
   hugging-xberg-mcp:
     build: .
+    # production pin: tuiteraz/hugging-xberg-mcp:2.2.0
     environment:
       - XBERG_API_URL=http://xberg:8000
       - XBERG_LLM_BASE_URL=http://lite-llm:4000/v1
       - XBERG_LLM_MODEL=${XBERG_LLM_MODEL}
+      - XBERG_VLM_OCR_MODEL=puma-qwen3.5-2b-instruct
       - LITELLM_API_KEY=${LITELLM_API_KEY}
     depends_on:
       xberg:

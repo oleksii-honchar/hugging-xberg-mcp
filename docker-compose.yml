@@ -24,8 +24,8 @@ services:
       - xberg-cache:/app/.xberg
       - ./xberg.toml:/app/xberg.toml
     environment:
-      # VLM OCR + structured extraction point at LiteLLM on puma-net (internal http).
-      - XBERG_VLM_OCR_MODEL=${XBERG_VLM_OCR_MODEL}
+      # Structured extraction points at LiteLLM on puma-net (internal http). OCR VLM
+      # model now comes from xberg.toml (ADR-0004) — no env override here.
       - XBERG_LLM_BASE_URL=http://lite-llm:4000/v1
       - XBERG_LLM_MODEL=${XBERG_LLM_MODEL}
       - XBERG_LLM_API_KEY=${LITELLM_API_KEY}
@@ -51,6 +51,7 @@ services:
       - XBERG_API_URL=http://xberg:8000
       - XBERG_LLM_BASE_URL=https://lite-llm.lan/v1
       - XBERG_LLM_MODEL=${XBERG_LLM_MODEL}
+      - XBERG_VLM_OCR_MODEL=puma-qwen3.5-2b-instruct
       - LITELLM_API_KEY=${LITELLM_API_KEY}
     depends_on:
       xberg:

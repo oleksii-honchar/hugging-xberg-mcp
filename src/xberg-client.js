@@ -151,19 +151,77 @@ export function buildStructuredConfig() {
 }
 
 /**
+ * Build the OCR config block for xberg's /extract config JSON.
+ *
+ * xberg REPLACES (not merges) the per-request OCR config over xberg.toml
+ * defaults, so the returned block is always complete for the chosen engine.
+ *
+ * @param {string|undefined} ocrEngine - 'auto' | 'tesseract' | 'paddleocr' | 'vlm' (or undefined).
+ * @returns {Record<string, unknown>|null} OCR config block, or null when the
+ *   agent leaves the decision to the server default (undefined, 'auto', unknown).
+ * @throws {Error} when 'vlm' is selected but XBERG_VLM_OCR_MODEL is not configured.
+ */
+export function buildOcrConfig(ocrEngine) {
+  if (ocrEngine === undefined || ocrEngine === 'auto') {
+    return null;
+  }
+
+  if (ocrEngine === 'tesseract') {
+    return { backend: 'tesseract', vlm_fallback: { mode: 'disabled' } };
+  }
+
+  if (ocrEngine === 'paddleocr') {
+    return { backend: 'paddleocr', vlm_fallback: { mode: 'disabled' } };
+  }
+
+  if (ocrEngine === 'vlm') {
+    if (config.vlmOcrModel === null || config.vlmOcrModel === '') {
+      throw new Error("ocr_engine 'vlm' requires XBERG_VLM_OCR_MODEL to be set on the wrapper");
+    }
+    const vlmConfig = {
+      model: String(config.vlmOcrModel),
+    };
+    if (config.structuredBaseUrl !== null) {
+      vlmConfig.base_url = String(config.structuredBaseUrl);
+    }
+    if (config.structuredApiKey !== null) {
+      vlmConfig.api_key = String(config.structuredApiKey);
+    }
+    return { backend: 'vlm', vlm_fallback: { mode: 'disabled' }, vlm_config: vlmConfig };
+  }
+
+  // Unknown engine value — defensive: let the server default apply.
+  return null;
+}
+
+/**
  * POST /extract — extract structured data from a file.
  * Structured extraction is driven through the /extract config JSON
  * (config.structured_extraction); there is no /extract-structured endpoint.
  *
+ * xberg REPLACES the per-request OCR config over its defaults, so when an OCR
+ * engine is requested the returned block is injected complete (never merged
+ * with server defaults). 'auto' and undefined leave the decision to the server.
+ *
  * @param {string} data - Base64-encoded file data or full data URL.
+ * @param {'auto'|'tesseract'|'paddleocr'|'vlm'} [ocrEngine] - Optional OCR engine override.
  * @returns {Promise<{ ok: boolean, body?: unknown, status?: number, error?: string }>}
+ * @throws {Error} when ocrEngine is 'vlm' but XBERG_VLM_OCR_MODEL is not configured.
  */
-export async function extractStructured(data) {
+export async function extractStructured(data, ocrEngine) {
   const buffer = decodeToBuffer(data);
+
+  let extractConfig = buildStructuredConfig();
+  if (ocrEngine && ocrEngine !== 'auto' && !('ocr' in extractConfig)) {
+    const ocrBlock = buildOcrConfig(ocrEngine);
+    if (ocrBlock !== null) {
+      extractConfig = { ...extractConfig, ocr: ocrBlock };
+    }
+  }
 
   const formData = new FormData();
   formData.append('files', new File([buffer], 'file', { type: 'application/octet-stream' }));
-  formData.append('config', JSON.stringify(buildStructuredConfig()));
+  formData.append('config', JSON.stringify(extractConfig));
 
   logDebug(`xberg POST /extract file_size=${buffer.length}`);
 
