@@ -4,7 +4,7 @@ title: "Deploy hugging-xberg-mcp Stack (Docker Compose + LiteLLM)"
 createdAt: "2026-08-21T10:59:18Z"
 updatedAt: "2026-09-05T11:30:01Z"
 tags: [operations, deployment, docker, litellm]
-see_also: ["architectures/hugging-xberg-mcp/containers/0001-system-container.container.md", "runbooks/0001-restart-mcp-stack-puma.runbook.md", "adrs/0001-raise-body-limit.adr.md", "adrs/0004-structured-extraction-via-config.adr.md"]
+see_also: ["architectures/hugging-xberg-mcp/containers/0001-system-container.container.md", "runbooks/0001-restart-mcp-stack-puma.runbook.md", "decisions/0001-raise-body-limit.decision.md", "decisions/0004-structured-extraction-via-config.decision.md"]
 deprecated:
   date: null
   reason: null
@@ -96,7 +96,7 @@ volumes:
   - ./my-schema.json:/app/src/structured-schema.json:ro
 ```
 
-The schema is forwarded to Xberg as `config.structured_extraction.schema` on `/extract` (ADR-0004).
+The schema is forwarded to Xberg as `config.structured_extraction.schema` on `/extract` (DEC-0004).
 
 ## Verification
 
@@ -106,4 +106,4 @@ The schema is forwarded to Xberg as `config.structured_extraction.schema` on `/e
 
 ## Rollback
 
-- Use the restart runbook's pre-port rollback (old `hugging-kreuzberg` compose dir kept stopped) — see [[0001-restart-mcp-stack-puma.runbook]] and ADR-0005
+- Use the restart runbook's pre-port rollback (old `hugging-kreuzberg` compose dir kept stopped) — see [[0001-restart-mcp-stack-puma.runbook]] and DEC-0005

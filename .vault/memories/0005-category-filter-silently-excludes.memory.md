@@ -19,7 +19,7 @@ opencode's `allowedMcpCategories` in agent config silently excludes MCP servers 
 
 ## Context
 
-Observed during hugging-xberg-mcp integration (originally discovered with the pre-port hugging-kreuzberg-mcp, see ADR-0005). The server was configured with `"category": "documents"`, but the agent's `allowedMcpCategories` didn't include `"documents"`. Tools were silently excluded.
+Observed during hugging-xberg-mcp integration (originally discovered with the pre-port hugging-kreuzberg-mcp, see DEC-0005). The server was configured with `"category": "documents"`, but the agent's `allowedMcpCategories` didn't include `"documents"`. Tools were silently excluded.
 
 ## Impact
 

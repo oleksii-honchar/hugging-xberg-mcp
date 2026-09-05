@@ -13,7 +13,7 @@ deprecated:
 
 # Runbook: Restart MCP Stack on puma.lan
 
-> **Draft note (in-repo):** Rebranded during the `hugging-kreuzberg-mcp` → `hugging-xberg-mcp` port (ADR-0005). Promotion to the durable vault is **pending vault-keeper review** — do not self-promote. The puma deployment lives in `lite-llm/mcp/hugging-xberg/` (old `hugging-kreuzberg/` dir kept stopped for rollback).
+> **Draft note (in-repo):** Rebranded during the `hugging-kreuzberg-mcp` → `hugging-xberg-mcp` port (DEC-0005). Promotion to the durable vault is **pending vault-keeper review** — do not self-promote. The puma deployment lives in `lite-llm/mcp/hugging-xberg/` (old `hugging-kreuzberg/` dir kept stopped for rollback).
 
 ## Prerequisites
 
@@ -63,4 +63,4 @@ deprecated:
 - If restart fails, check logs: `ssh tuiteraz@puma.lan "docker logs hugging-xberg-mcp --tail 50"`
 - Restart LiteLLM if proxy config changed: `ssh tuiteraz@puma.lan "docker restart /lite-llm"`
 - Full restart: `docker compose down && docker compose up -d` again, then verify steps above
-- Pre-port rollback: the old `lite-llm/mcp/hugging-kreuzberg/` compose dir is kept stopped — re-enable it and revert `config.yaml`/`opencode.jsonc` (see ADR-0005)
+- Pre-port rollback: the old `lite-llm/mcp/hugging-kreuzberg/` compose dir is kept stopped — re-enable it and revert `config.yaml`/`opencode.jsonc` (see DEC-0005)

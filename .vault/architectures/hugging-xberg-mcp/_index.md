@@ -8,7 +8,7 @@ tags: []
 
 # hugging-xberg-mcp — System
 
-MCP wrapper server for the Xberg document extraction API. Stateless Streamable HTTP transport on port 3000, proxied through LiteLLM. Port of the previous hugging-kreuzberg-mcp wrapper (xberg backend, see ADR-0005).
+MCP wrapper server for the Xberg document extraction API. Stateless Streamable HTTP transport on port 3000, proxied through LiteLLM. Port of the previous hugging-kreuzberg-mcp wrapper (xberg backend, see DEC-0005).
 
 ## Containers
 

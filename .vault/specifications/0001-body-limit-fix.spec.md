@@ -8,7 +8,7 @@ updatedAt: "2026-08-17T20:40:00Z"
 tags: [mcp, express, bugfix]
 owner: ""
 target: ""
-see_also: ["adrs/0001-raise-body-limit.adr.md", "adrs/0002-preserve-status-codes.adr.md", "adrs/0003-align-client-guard.adr.md", "memories/0001-opencode-inline-base64-gotcha.memory.md"]
+see_also: ["decisions/0001-raise-body-limit.decision.md", "decisions/0002-preserve-status-codes.decision.md", "decisions/0003-align-client-guard.decision.md", "memories/0001-opencode-inline-base64-gotcha.memory.md"]
 deprecated:
   date: null
   reason: null
@@ -17,7 +17,7 @@ deprecated:
 
 # Specification: Fix MCP 500 — Body Size Limit and Error Masking
 
-> **Historical record (pre-port):** This spec documents the original kreuzberg-era fix (10mb → 20mb, `MAX_BASE64_LENGTH` 19,400,860 in `src/kreuzberg-client.js`). Since the `hugging-kreuzberg-mcp` → `hugging-xberg-mcp` port (ADR-0005) the limits are 50mb (`MCP_BODY_LIMIT`) and `MAX_BASE64_LENGTH` 48,900,000 (ADR-0001/ADR-0003). The 413→-32600 error-masking fix remains in force (ADR-0002).
+> **Historical record (pre-port):** This spec documents the original kreuzberg-era fix (10mb → 20mb, `MAX_BASE64_LENGTH` 19,400,860 in `src/kreuzberg-client.js`). Since the `hugging-kreuzberg-mcp` → `hugging-xberg-mcp` port (DEC-0005) the limits are 50mb (`MCP_BODY_LIMIT`) and `MAX_BASE64_LENGTH` 48,900,000 (DEC-0001/DEC-0003). The 413→-32600 error-masking fix remains in force (DEC-0002).
 
 ## Goal
 
@@ -53,7 +53,7 @@ Fix HTTP 500 errors when users attach images >7.5MB: (1) express.json body limit
 
 ## Links
 
-- [[adrs/0001-raise-body-limit.adr]] — body limit increase
-- [[adrs/0002-preserve-status-codes.adr]] — error handler
-- [[adrs/0003-align-client-guard.adr]] — client guard alignment
+- [[decisions/0001-raise-body-limit.decision]] — body limit increase
+- [[decisions/0002-preserve-status-codes.decision]] — error handler
+- [[decisions/0003-align-client-guard.decision]] — client guard alignment
 - [[memories/0001-opencode-inline-base64-gotcha.memory]] — root cause

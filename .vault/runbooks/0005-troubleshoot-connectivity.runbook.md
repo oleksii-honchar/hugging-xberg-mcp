@@ -4,7 +4,7 @@ title: "Troubleshoot hugging-xberg-mcp Connectivity"
 createdAt: "2026-08-21T10:59:18Z"
 updatedAt: "2026-08-21T10:59:18Z"
 tags: [operations, troubleshooting, diagnostics]
-see_also: ["runbooks/0004-configure-opencode.runbook.md", "runbooks/0001-restart-mcp-stack-puma.runbook.md", "memories/0004-opencode-no-retry-mcp-connection.memory.md", "memories/0003-litellm-tool-name-prefixing.memory.md", "memories/0006-base64-corruption-422-errors.memory.md", "adrs/0001-raise-body-limit.adr.md", "adrs/0002-preserve-status-codes.adr.md"]
+see_also: ["runbooks/0004-configure-opencode.runbook.md", "runbooks/0001-restart-mcp-stack-puma.runbook.md", "memories/0004-opencode-no-retry-mcp-connection.memory.md", "memories/0003-litellm-tool-name-prefixing.memory.md", "memories/0006-base64-corruption-422-errors.memory.md", "decisions/0001-raise-body-limit.decision.md", "decisions/0002-preserve-status-codes.decision.md"]
 deprecated:
   date: null
   reason: null
@@ -144,7 +144,7 @@ curl -X GET https://lite-llm.lan/v1/user/permissions \
 
 **Fix:**
 - Keep files under ~36.5MB raw (base64 ≤ 48_900_000 chars), or
-- Raise `MCP_BODY_LIMIT` (e.g., `MCP_BODY_LIMIT=60mb`) — but keep `MAX_BASE64_LENGTH` aligned with the server limit (see [[adrs/0003-align-client-guard.adr]])
+- Raise `MCP_BODY_LIMIT` (e.g., `MCP_BODY_LIMIT=60mb`) — but keep `MAX_BASE64_LENGTH` aligned with the server limit (see [[decisions/0003-align-client-guard.decision]])
 
 ### Issue 6: Xberg extraction errors (422 ParsingError / processing warnings)
 

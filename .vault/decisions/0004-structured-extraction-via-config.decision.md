@@ -1,6 +1,6 @@
 ---
-type: adr
-id: ADR-0004
+type: decision
+id: DEC-0004
 title: "Structured Extraction via config.structured_extraction on /extract"
 status: accepted
 createdAt: "2026-08-17T20:40:00Z"
@@ -8,16 +8,16 @@ updatedAt: "2026-08-17T20:40:00Z"
 tags: [mcp, xberg, structured-extraction, extract]
 supersedes: []
 superseded_by: []
-see_also: ["adrs/0005-port-hugging-kreuzberg-to-xberg.adr.md"]
+see_also: ["decisions/0005-port-hugging-kreuzberg-to-xberg.decision.md"]
 deprecated:
   date: null
   reason: null
   superseded_by: null
 ---
 
-# ADR-0004: Structured Extraction via config.structured_extraction on /extract
+# DEC-0004: Structured Extraction via config.structured_extraction on /extract
 
-> **Draft note (in-repo):** Added during the `hugging-kreuzberg-mcp` → `hugging-xberg-mcp` port (see ADR-0005). Promotion to the durable vault is **pending vault-keeper review** — do not self-promote.
+> **Draft note (in-repo):** Added during the `hugging-kreuzberg-mcp` → `hugging-xberg-mcp` port (see DEC-0005). Promotion to the durable vault is **pending vault-keeper review** — do not self-promote.
 
 ## Context
 

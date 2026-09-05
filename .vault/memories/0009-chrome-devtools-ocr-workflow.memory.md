@@ -31,4 +31,4 @@ Documented in the opencode integration docs as a practical pipeline for reading 
 ## Impact
 
 - Useful pattern whenever content is only accessible as a rendered browser view.
-- Note the size limits still apply (base64 ≤ 48_900_000 chars / ~36.5MB raw — see ADR-0001/ADR-0003).
+- Note the size limits still apply (base64 ≤ 48_900_000 chars / ~36.5MB raw — see DEC-0001/DEC-0003).

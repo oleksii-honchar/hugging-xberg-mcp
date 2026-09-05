@@ -28,7 +28,7 @@ This transport pattern is required for LiteLLM compatibility — LiteLLM's clien
 - **GET/DELETE /mcp:** Returns 405 (not used by LiteLLM)
 - **Accept header:** `application/json, text/event-stream`
 - **Response:** SSE-wrapped (`event: message\ndata: {...}`) or direct JSON
-- **Express body parser:** Must have 50mb limit for base64 images/PDFs (`MCP_BODY_LIMIT`, env-configurable — see ADR-0001)
+- **Express body parser:** Must have 50mb limit for base64 images/PDFs (`MCP_BODY_LIMIT`, env-configurable — see DEC-0001)
 - **Error handling:** Preserve `err.status` (413→413, else 500) with JSON-RPC error codes
 
 ## LiteLLM Protocol — What Upstream Servers Must Do
@@ -85,7 +85,7 @@ The MCP SDK's `StreamableHTTPServerTransport` handles both automatically.
 |-------------|---------|
 | 200 | Success (SSE or JSON response) |
 | 405 | Method not allowed (GET/DELETE on /mcp) |
-| 413 | Payload too large — mapped to JSON-RPC -32600 (see ADR-0002) |
+| 413 | Payload too large — mapped to JSON-RPC -32600 (see DEC-0002) |
 | 500 | Internal server error (JSON-RPC -32603) |
 
 Standard JSON-RPC 2.0 error codes apply: -32700, -32600, -32601, -32602, -32603, and -32000..-32099 for application-specific errors.

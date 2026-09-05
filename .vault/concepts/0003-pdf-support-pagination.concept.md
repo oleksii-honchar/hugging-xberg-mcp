@@ -4,7 +4,7 @@ title: "PDF Support & Output-Side Pagination"
 createdAt: "2026-08-21T10:59:18Z"
 updatedAt: "2026-08-21T10:59:18Z"
 tags: [xberg, pdf, pagination, config]
-see_also: ["concepts/0004-mcp-tool-reference.concept.md", "adrs/0005-port-hugging-kreuzberg-to-xberg.adr.md", "architectures/hugging-xberg-mcp/components/0001-src-modules.component.md"]
+see_also: ["concepts/0004-mcp-tool-reference.concept.md", "decisions/0005-port-hugging-kreuzberg-to-xberg.decision.md", "architectures/hugging-xberg-mcp/components/0001-src-modules.component.md"]
 deprecated:
   date: null
   reason: null
@@ -19,7 +19,7 @@ deprecated:
 
 ## Why
 
-The xberg port (ADR-0005) extended extraction to PDFs without new MCP surface: the existing `extract_bytes` tool handles them through the `config` passthrough. Output-side pagination keeps the LLM's context usable by marking page boundaries and chunking long documents.
+The xberg port (DEC-0005) extended extraction to PDFs without new MCP surface: the existing `extract_bytes` tool handles them through the `config` passthrough. Output-side pagination keeps the LLM's context usable by marking page boundaries and chunking long documents.
 
 ## Key Details
 

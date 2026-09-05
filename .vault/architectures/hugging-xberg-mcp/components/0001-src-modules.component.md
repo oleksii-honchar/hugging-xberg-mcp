@@ -4,9 +4,9 @@ title: "hugging-xberg-mcp — Module Architecture (src/)"
 c4_level: component
 system: hugging-xberg-mcp
 createdAt: "2026-08-21T10:59:18Z"
-updatedAt: "2026-08-21T10:59:18Z"
-tags: [mcp, architecture, modules, c4]
-see_also: ["architectures/hugging-xberg-mcp/containers/0001-system-container.container.md", "adrs/0001-raise-body-limit.adr.md", "adrs/0002-preserve-status-codes.adr.md", "adrs/0003-align-client-guard.adr.md", "adrs/0004-structured-extraction-via-config.adr.md", "concepts/0001-mcp-streamable-http-stateless.concept.md"]
+updatedAt: "2026-09-05T10:19:00Z"
+tags: [mcp, architecture, modules, c4, ocr]
+see_also: ["architectures/hugging-xberg-mcp/containers/0001-system-container.container.md", "decisions/0001-raise-body-limit.decision.md", "decisions/0002-preserve-status-codes.decision.md", "decisions/0003-align-client-guard.decision.md", "decisions/0004-structured-extraction-via-config.decision.md", "concepts/0001-mcp-streamable-http-stateless.concept.md", "decisions/0007-ocr-engine-knob-request-level-config.decision.md", "specifications/0002-cpu-first-ocr-vlm-fallback.spec.md"]
 linked_elements: ["config-js", "logger-js", "xberg-client-js", "tools-js", "mcp-server-mjs", "xberg-api"]
 deprecated:
   date: null
@@ -27,7 +27,7 @@ C4Component
   Container_Boundary(mcp, "hugging-xberg-mcp") {
     Component(cfg, "config.js", "Configuration — all env vars loaded once at startup; exports config, TOOLS, ENDPOINTS")
     Component(log, "logger.js", "Structured logging — info/debug levels, base64 truncation, API key masking")
-    Component(client, "xberg-client.js", "Xberg API adapter — fetch, FormData, size guard, Result-like returns")
+    Component(client, "xberg-client.js", "Xberg API adapter — fetch, FormData, size guard, buildOcrConfig(ocrEngine), Result-like returns")
     Component(tools, "tools.js", "MCP tool definitions — thin handlers, delegate to client")
     Component(server, "mcp-server.mjs", "Server setup — Express + McpServer + Streamable HTTP transport + shutdown")
   }
@@ -62,7 +62,7 @@ Single source of truth for all environment variables. Loaded once at module init
 - **Exports:**
   - `config` — frozen configuration object with all env vars (`xbergUrl`, `logLevel`, `mcpPort`, structured-extraction settings)
   - `TOOLS` — constant tool name strings (`EXTRACT_BYTES`, `EXTRACT_STRUCTURED`)
-  - `ENDPOINTS` — constant Xberg API endpoint paths (`EXTRACT: '/extract'` only; the old `/extract-structured` endpoint was removed — see ADR-0004)
+  - `ENDPOINTS` — constant Xberg API endpoint paths (`EXTRACT: '/extract'` only; the old `/extract-structured` endpoint was removed — see DEC-0004)
 - Loads `structured-schema.json` from disk at startup (`loadStructuredSchema()`)
 
 ### logger.js — Structured Logging
@@ -80,20 +80,22 @@ Encapsulates all HTTP calls to the Xberg REST API. Returns Result-like objects: 
 - **Exports:**
   - `extractBase64(input)` — strips `data:*/*;base64,` prefix from data URLs; passes raw base64 through unchanged
   - `decodeToBuffer(input)` — extracts base64 and decodes to a Node.js Buffer
-  - `extractBytes(args)` — POST `/extract` with multipart form data (`files`, `config`, optional `format`/`output_format`)
-  - `buildStructuredConfig()` — builds the `config.structured_extraction` JSON from server-side env vars
-  - `extractStructured(data)` — POST `/extract` with `config.structured_extraction` (schema + LLM config from env vars); the old `/extract-structured` endpoint no longer exists (ADR-0004)
+   - `extractBytes(args)` — POST `/extract` with multipart form data (`files`, `config`, optional `format`/`output_format`)
+   - `buildOcrConfig(ocrEngine)` — composes the complete per-request `ocr` block (engines + `vlm_fallback` + VLM model from `XBERG_VLM_OCR_MODEL`) based on the `ocr_engine` knob (2.2.0+)
+   - `buildStructuredConfig()` — builds the `config.structured_extraction` JSON from server-side env vars
+  - `extractStructured(data)` — POST `/extract` with `config.structured_extraction` (schema + LLM config from env vars); the old `/extract-structured` endpoint no longer exists (DEC-0004)
 - **Data URL support:** both tools accept raw base64 or full data URLs; `extractBase64()` converts transparently
-- **Input size limit:** `MAX_BASE64_LENGTH = 48_900_000` chars (~36.5MB raw) — larger payloads rejected with a clear error before any HTTP call (ADR-0003)
+- **Input size limit:** `MAX_BASE64_LENGTH = 48_900_000` chars (~36.5MB raw) — larger payloads rejected with a clear error before any HTTP call (DEC-0003)
 
 ### tools.js — MCP Tool Definitions
 
 Thin handlers that validate input (zod), log invocation, delegate to xberg-client, and format the response. Business logic lives in xberg-client.js.
 
 - **Exports:** `registerTools(mcpServer)` — registers both tools on the given McpServer instance
-- **Tool signatures:**
-  - `extract_bytes({ data, mime_type?, config?, response_format? })`
-  - `extract_structured({ data })`
+ - **Tool signatures:**
+   - `extract_bytes({ data, mime_type?, config?, response_format?, ocr_engine? })`
+   - `extract_structured({ data, ocr_engine? })`
+ - **`ocr_engine` (2.2.0+):** when set, `buildOcrConfig()` composes a complete `ocr` block sent as top-level `ocr` in the `/extract` body — Xberg **replaces** (not merges) the per-request config ([[memories/0010-xberg-request-config-replace-not-merge.memory]])
 - **`extract_bytes` `response_format` enum:** `['json','toon','plain','markdown','djot','html']` — `'toon'` maps to the multipart `format=toon` field; `'json'` omits the format field (default Xberg JSON envelope); `'plain'|'markdown'|'djot'|'html'` map to `output_format=<value>` content rendering
 
 ### mcp-server.mjs — Server Setup
@@ -101,12 +103,12 @@ Thin handlers that validate input (zod), log invocation, delegate to xberg-clien
 Express application with MCP transport. Creates a fresh `McpServer` per request (stateless mode).
 
 **Lifecycle:**
-1. Express app created with JSON body parser (`MCP_BODY_LIMIT`, default 50mb — env-configurable for base64 images/PDFs, ADR-0001)
+1. Express app created with JSON body parser (`MCP_BODY_LIMIT`, default 50mb — env-configurable for base64 images/PDFs, DEC-0001)
 2. POST /mcp handler creates new McpServer + StreamableHTTPServerTransport per request (`sessionIdGenerator: undefined`)
 3. GET/DELETE /mcp return 405
 4. Graceful shutdown on SIGINT
 
-**413 handling:** body-parser 413 (payload too large) is preserved as HTTP 413 with JSON-RPC code -32600 and message `Payload too large — request body must be under 50MB`; other errors fall back to 500 with -32603 (ADR-0002).
+**413 handling:** body-parser 413 (payload too large) is preserved as HTTP 413 with JSON-RPC code -32600 and message `Payload too large — request body must be under 50MB`; other errors fall back to 500 with -32603 (DEC-0002).
 
 ## Data Flow
 
@@ -141,13 +143,13 @@ Same flow, but:
 
 - Tool only takes `data` (base64 or data URL)
 - XbergClient builds a `config` JSON with `structured_extraction` (schema, schema_name, schema_description, prompt, strict, llm{model, base_url, api_key}) from server-side env vars
-- POST to `/extract` (the same endpoint as `extract_bytes`) — no separate endpoint (ADR-0004)
+- POST to `/extract` (the same endpoint as `extract_bytes`) — no separate endpoint (DEC-0004)
 
 ## Notes
 
 - **Stateless per request** — fresh `McpServer` + transport per POST /mcp (see [[concepts/0001-mcp-streamable-http-stateless.concept]])
-- **Body limit** — 50mb via `MCP_BODY_LIMIT` (see [[adrs/0001-raise-body-limit.adr]])
-- **413 preservation** — see [[adrs/0002-preserve-status-codes.adr]]
-- **Client guard** — `MAX_BASE64_LENGTH` 48_900_000 (see [[adrs/0003-align-client-guard.adr]])
-- **Structured extraction** — config-driven, `/extract` only (see [[adrs/0004-structured-extraction-via-config.adr]])
+- **Body limit** — 50mb via `MCP_BODY_LIMIT` (see [[decisions/0001-raise-body-limit.decision]])
+- **413 preservation** — see [[decisions/0002-preserve-status-codes.decision]]
+- **Client guard** — `MAX_BASE64_LENGTH` 48_900_000 (see [[decisions/0003-align-client-guard.decision]])
+- **Structured extraction** — config-driven, `/extract` only (see [[decisions/0004-structured-extraction-via-config.decision]])
 - Parent container level: [[containers/0001-system-container.container]]

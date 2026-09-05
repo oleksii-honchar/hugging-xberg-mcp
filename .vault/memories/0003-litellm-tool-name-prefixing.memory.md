@@ -19,7 +19,7 @@ When LiteLLM proxies an MCP server through its gateway (`/mcp/<server_name>`), i
 
 ## Context
 
-Discovered during the original hugging-kreuzberg-mcp integration (pre-port; now hugging-xberg-mcp, see ADR-0005). Upstream server returns `extract_bytes`, but LiteLLM returns `hugging_xberg-extract_bytes` (previously `hugging_kreuzberg-extract_bytes`). This caused "all tools filtered out" errors when `enabledTools` used unprefixed names.
+Discovered during the original hugging-kreuzberg-mcp integration (pre-port; now hugging-xberg-mcp, see DEC-0005). Upstream server returns `extract_bytes`, but LiteLLM returns `hugging_xberg-extract_bytes` (previously `hugging_kreuzberg-extract_bytes`). This caused "all tools filtered out" errors when `enabledTools` used unprefixed names.
 
 ## Impact
 

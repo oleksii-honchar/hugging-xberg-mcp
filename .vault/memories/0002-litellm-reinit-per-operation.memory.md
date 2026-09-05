@@ -19,7 +19,7 @@ LiteLLM's `MCPClient.run_with_session()` wraps **every operation** (list_tools, 
 
 ## Context
 
-Discovered while building the original hugging-kreuzberg-mcp (pre-port; now hugging-xberg-mcp, see ADR-0005) to work behind LiteLLM's MCP proxy. The server must handle this gracefully — be stateless or tolerate re-initialization. Verified against LiteLLM source code (`experimental_mcp_client/client.py`).
+Discovered while building the original hugging-kreuzberg-mcp (pre-port; now hugging-xberg-mcp, see DEC-0005) to work behind LiteLLM's MCP proxy. The server must handle this gracefully — be stateless or tolerate re-initialization. Verified against LiteLLM source code (`experimental_mcp_client/client.py`).
 
 ## Impact
 

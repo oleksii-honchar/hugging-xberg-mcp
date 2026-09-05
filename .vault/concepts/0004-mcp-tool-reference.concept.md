@@ -2,9 +2,9 @@
 type: concept
 title: "MCP Tool Reference — extract_bytes / extract_structured"
 createdAt: "2026-08-21T10:59:18Z"
-updatedAt: "2026-08-21T10:59:18Z"
-tags: [mcp, tools, api-reference]
-see_also: ["architectures/hugging-xberg-mcp/components/0001-src-modules.component.md", "concepts/0003-pdf-support-pagination.concept.md", "adrs/0004-structured-extraction-via-config.adr.md", "concepts/0002-opencode-attachment-uri-bridge.concept.md"]
+updatedAt: "2026-09-05T10:19:00Z"
+tags: [mcp, tools, api-reference, ocr]
+see_also: ["architectures/hugging-xberg-mcp/components/0001-src-modules.component.md", "concepts/0003-pdf-support-pagination.concept.md", "decisions/0004-structured-extraction-via-config.decision.md", "concepts/0002-opencode-attachment-uri-bridge.concept.md", "decisions/0007-ocr-engine-knob-request-level-config.decision.md", "specifications/0002-cpu-first-ocr-vlm-fallback.spec.md"]
 deprecated:
   date: null
   reason: null
@@ -27,6 +27,7 @@ Accepts base64-encoded file data or a full data URL (e.g., `data:image/png;base6
 | `mime_type` | string | no | Optional MIME type hint for the file |
 | `config` | object | no | Optional extraction config override as JSON (e.g. `{"pages": {"insert_page_markers": true}}`) |
 | `response_format` | string | no | `'json'`, `'toon'`, `'plain'`, `'markdown'`, `'djot'`, `'html'` |
+| `ocr_engine` | string | no | `'auto'` (default, CPU-first + VLM fallback), `'tesseract'`, `'paddleocr'`, `'vlm'` (2.2.0+) |
 
 **`response_format` mapping** (server-side):
 
@@ -63,13 +64,14 @@ PDF with page markers (see [[concepts/0003-pdf-support-pagination.concept]]):
 
 ## `extract_structured`
 
-Accepts base64-encoded file data or a full data URL. Schema and model are configured server-side via environment variables — only the file data is passed as input. Implemented via Xberg's config-driven structured extraction (`config.structured_extraction`) on `/extract` (ADR-0004).
+Accepts base64-encoded file data or a full data URL. Schema and model are configured server-side via environment variables — only the file data is passed as input. Implemented via Xberg's config-driven structured extraction (`config.structured_extraction`) on `/extract` (DEC-0004).
 
 **Input:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `data` | string | yes | Base64-encoded file data or full data URL |
+| `ocr_engine` | string | no | `'auto'` (default, CPU-first + VLM fallback), `'tesseract'`, `'paddleocr'`, `'vlm'` (2.2.0+) |
 
 ## Response Envelope (both tools)
 

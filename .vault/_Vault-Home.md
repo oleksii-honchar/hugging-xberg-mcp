@@ -6,12 +6,12 @@ Durable knowledge vault for the hugging-xberg MCP server project (port of the pr
 
 ## Vault Areas
 
-- [[adrs/_index]] — Architecture Decision Records (5 ADRs)
-- [[specifications/_index]] — Feature specs and migrations (1 spec)
+- [[decisions/_index]] — Architecture Decision Records (10 ADRs)
+- [[specifications/_index]] — Feature specs and migrations (2 specs)
 - [[concepts/_index]] — Domain concepts and vocabulary (4 concepts)
 - [[architectures/_index]] — C4 layered architecture (1 system: 1 container + 1 component node)
 - [[runbooks/_index]] — Operational procedures (5 runbooks)
-- [[memories/_index]] — Gotchas and operational learnings (9 memories)
+- [[memories/_index]] — Gotchas and operational learnings (11 memories)
 
 ## Vault Contract
 

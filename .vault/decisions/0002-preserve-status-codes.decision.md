@@ -1,6 +1,6 @@
 ---
-type: adr
-id: ADR-0002
+type: decision
+id: DEC-0002
 title: "Preserve HTTP Status Codes in Error Handler"
 status: accepted
 createdAt: "2026-08-09T10:59:55Z"
@@ -8,16 +8,16 @@ updatedAt: "2026-08-17T20:40:00Z"
 tags: [mcp, express, error-handling]
 supersedes: []
 superseded_by: []
-see_also: ["adrs/0001-raise-body-limit.adr.md", "specifications/0001-body-limit-fix.spec.md"]
+see_also: ["decisions/0001-raise-body-limit.decision.md", "specifications/0001-body-limit-fix.spec.md"]
 deprecated:
   date: null
   reason: null
   superseded_by: null
 ---
 
-# ADR-0002: Preserve HTTP Status Codes in Error Handler
+# DEC-0002: Preserve HTTP Status Codes in Error Handler
 
-> **Draft note (in-repo):** This ADR was updated during the `hugging-kreuzberg-mcp` → `hugging-xberg-mcp` port (see ADR-0005). Promotion of these edits to the durable vault is **pending vault-keeper review** — do not self-promote.
+> **Draft note (in-repo):** This ADR was updated during the `hugging-kreuzberg-mcp` → `hugging-xberg-mcp` port (see DEC-0005). Promotion of these edits to the durable vault is **pending vault-keeper review** — do not self-promote.
 
 ## Context
 
@@ -25,7 +25,7 @@ The Express error handler converts all errors to HTTP 500, masking body-parser's
 
 ## Decision
 
-Preserve `err.status` from body-parser. Return 413 with JSON-RPC code -32600 and user-friendly message for 413 errors; fall back to 500 with -32603 for other errors. The 413 message reflects the env-configurable body limit: `Payload too large — request body must be under 50MB` (limit text derived from `MCP_BODY_LIMIT`, default 50mb — see ADR-0001).
+Preserve `err.status` from body-parser. Return 413 with JSON-RPC code -32600 and user-friendly message for 413 errors; fall back to 500 with -32603 for other errors. The 413 message reflects the env-configurable body limit: `Payload too large — request body must be under 50MB` (limit text derived from `MCP_BODY_LIMIT`, default 50mb — see DEC-0001).
 
 ## Alternatives Considered
 
