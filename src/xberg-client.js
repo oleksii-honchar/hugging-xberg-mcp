@@ -9,6 +9,9 @@
 import { config } from './config.js';
 import { logDebug, logInfo } from './logger.js';
 
+const DEFAULT_DESCRIBE_PROMPT =
+  'Describe this image in detail. Include the main subject, setting, notable objects, colors, and any relevant context.';
+
 /**
  * Maximum base64 character length before rejecting.
  * ~48.9MB base64 chars (~36.5MB raw), below the 50mb express.json limit
@@ -68,6 +71,57 @@ export function extractBase64(input) {
 export function decodeToBuffer(input) {
   const base64Data = extractBase64(input);
   return Buffer.from(base64Data, 'base64');
+}
+
+/**
+ * POST /extract — describe an image using VLM.
+ *
+ * @param {object} args
+ * @param {string} args.data - Base64-encoded image data or full data URL.
+ * @param {string} [args.prompt] - Custom VLM prompt.
+ * @param {string} [args.model] - VLM model override.
+ * @returns {Promise<{ ok: boolean, body?: unknown, status?: number, error?: string }>}
+ */
+export async function describeImage(args) {
+  const buffer = decodeToBuffer(args.data);
+
+  if (!args.model) {
+    if (!config.vlmOcrModel) {
+      throw new Error('VLM model not configured. Set XBERG_VLM_OCR_MODEL environment variable.');
+    }
+  }
+
+  const vlmConfig = { model: args.model || config.vlmOcrModel };
+  if (config.structuredBaseUrl !== null) {
+    vlmConfig.base_url = String(config.structuredBaseUrl);
+  }
+  if (config.structuredApiKey !== null) {
+    vlmConfig.api_key = String(config.structuredApiKey);
+  }
+
+  const extractConfig = {
+    ocr: {
+      backend: 'vlm',
+      vlm_fallback: { mode: 'disabled' },
+      vlm_config: vlmConfig,
+    },
+  };
+  if (args.prompt) {
+    extractConfig.ocr.vlm_config.prompt = args.prompt;
+  } else {
+    extractConfig.ocr.vlm_config.prompt = DEFAULT_DESCRIBE_PROMPT;
+  }
+
+  const formData = new FormData();
+  formData.append('files', new File([buffer], 'file', { type: 'application/octet-stream' }));
+  formData.append('config', JSON.stringify(extractConfig));
+
+  logDebug(`xberg POST /extract describe_image file_size=${buffer.length}`);
+
+  const url = `${config.xbergUrl}/extract`;
+  const response = await fetch(url, { method: 'POST', body: formData });
+
+  return handleXbergResponse(response, 'describe_image');
 }
 
 /**

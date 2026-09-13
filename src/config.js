@@ -42,6 +42,7 @@ export const config = {
 export const TOOLS = Object.freeze({
   EXTRACT_BYTES: 'extract_bytes',
   EXTRACT_STRUCTURED: 'extract_structured',
+  DESCRIBE_IMAGE: 'describe_image',
 });
 
 /** Xberg API endpoints. */

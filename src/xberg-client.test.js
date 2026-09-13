@@ -4,6 +4,7 @@ import {
   extractStructured,
   buildOcrConfig,
   buildStructuredConfig,
+  describeImage,
 } from './xberg-client.js';
 import { config } from './config.js';
 import { describe, it, afterEach } from 'node:test';
@@ -375,6 +376,137 @@ describe('extractStructured outbound request', () => {
         /ocr_engine 'vlm' requires XBERG_VLM_OCR_MODEL/,
       );
       assert.equal(mock.calls.length, 0, 'no request must be sent when vlm config is impossible');
+    } finally {
+      config.vlmOcrModel = saved;
+    }
+  });
+});
+
+describe('describeImage outbound request', () => {
+  let mock;
+
+  const KEYS = ['vlmOcrModel', 'structuredBaseUrl', 'structuredApiKey'];
+  let saved;
+
+  afterEach(() => {
+    mock?.restore();
+    mock = null;
+    if (saved) {
+      for (const k of KEYS) config[k] = saved[k];
+      saved = null;
+    }
+  });
+
+  const saveConfig = () => {
+    saved = {};
+    for (const k of KEYS) saved[k] = config[k];
+  };
+
+  it('sends correct VLM OCR config to /extract', async () => {
+    saveConfig();
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+    mock = mockFetch(okResponse);
+    const data = Buffer.from('hello world').toString('base64');
+
+    await describeImage({ data });
+
+    assert.equal(mock.calls.length, 1);
+    const { url, options, body } = mock.calls[0];
+    assert.equal(url, `${config.xbergUrl}/extract`);
+    assert.equal(options.method, 'POST');
+    assert.ok(body instanceof FormData);
+
+    const configJson = JSON.parse(body.get('config'));
+    assert.equal(configJson.ocr.backend, 'vlm');
+    assert.equal(configJson.ocr.vlm_fallback.mode, 'disabled');
+  });
+
+  it('uses default prompt when none provided', async () => {
+    saveConfig();
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+    mock = mockFetch(okResponse);
+    const data = Buffer.from('hello world').toString('base64');
+
+    await describeImage({ data });
+
+    const configJson = JSON.parse(mock.calls[0].body.get('config'));
+    assert.match(configJson.ocr.vlm_config.prompt, /Describe this image in detail/);
+  });
+
+  it('uses custom prompt when provided', async () => {
+    saveConfig();
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+    mock = mockFetch(okResponse);
+    const data = Buffer.from('hello world').toString('base64');
+    const customPrompt = 'What is in this picture?';
+
+    await describeImage({ data, prompt: customPrompt });
+
+    const configJson = JSON.parse(mock.calls[0].body.get('config'));
+    assert.equal(configJson.ocr.vlm_config.prompt, customPrompt);
+  });
+
+  it('uses default model when none provided', async () => {
+    saveConfig();
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+    mock = mockFetch(okResponse);
+    const data = Buffer.from('hello world').toString('base64');
+
+    await describeImage({ data });
+
+    const configJson = JSON.parse(mock.calls[0].body.get('config'));
+    assert.equal(configJson.ocr.vlm_config.model, config.vlmOcrModel);
+  });
+
+  it('uses model override when provided', async () => {
+    mock = mockFetch(okResponse);
+    const data = Buffer.from('hello world').toString('base64');
+    const customModel = 'Qwen/Qwen3-VL-8B-Instruct';
+
+    await describeImage({ data, model: customModel });
+
+    const configJson = JSON.parse(mock.calls[0].body.get('config'));
+    assert.equal(configJson.ocr.vlm_config.model, customModel);
+  });
+
+  it('handles successful response', async () => {
+    saveConfig();
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+    const stubBody = { results: [{ content: 'A cat on a mat' }], summary: { results: 1 } };
+    mock = mockFetch(() => ({ ok: true, status: 200, json: async () => stubBody }));
+    const data = Buffer.from('hello world').toString('base64');
+
+    const result = await describeImage({ data });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.body, stubBody);
+  });
+
+  it('handles error response', async () => {
+    saveConfig();
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+    mock = mockFetch(() => failResponse(500, 'vlm timeout'));
+    const data = Buffer.from('hello world').toString('base64');
+
+    const result = await describeImage({ data });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 500);
+    assert.match(result.error, /Xberg error \(500\): vlm timeout/);
+  });
+
+  it('throws when VLM model not configured', async () => {
+    mock = mockFetch(okResponse);
+    const saved = config.vlmOcrModel;
+    config.vlmOcrModel = null;
+    const data = Buffer.from('hello world').toString('base64');
+
+    try {
+      await assert.rejects(
+        () => describeImage({ data }),
+        /VLM model not configured/,
+      );
+      assert.equal(mock.calls.length, 0, 'no request must be sent when model is not configured');
     } finally {
       config.vlmOcrModel = saved;
     }

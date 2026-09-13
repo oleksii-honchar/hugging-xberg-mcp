@@ -14,6 +14,7 @@ import {
   buildOcrConfig,
   extractBytes as xbergExtractBytes,
   extractStructured as xbergExtractStructured,
+  describeImage,
 } from './xberg-client.js';
 
 /** OCR engines the wrapper can explicitly request, overriding the server default. */
@@ -103,6 +104,38 @@ export function registerTools(mcpServer) {
     },
     handleExtractStructured,
   );
+
+  mcpServer.registerTool(
+    TOOLS.DESCRIBE_IMAGE,
+    {
+      title: 'Describe Image',
+      description:
+        'Describe an image using a Vision Language Model. ' +
+        'Accepts image data as opencode://attachment/ URI, data URL, or base64 string. ' +
+        'Returns a natural language description of the image. ' +
+        'The default prompt asks for a detailed description including subject, setting, ' +
+        'notable objects, colors, and context.',
+      inputSchema: z.object({
+        data: z.string().describe(
+          'Image data. Accepts one of these formats:\n' +
+          '1. Attachment URI (recommended for attached files):\n' +
+          '   opencode://attachment/<uuid>.png\n' +
+          '2. Data URL:\n' +
+          '   data:image/png;base64,...\n' +
+          '3. Raw base64 string:\n' +
+          '   iVBORw0KGgoAAAANSUhEUgAA...\n' +
+          'Note: HTTP URLs (https://...) are NOT supported.'
+        ),
+        prompt: z.string().optional().describe(
+          'Custom prompt for the VLM. Defaults to a detailed image description prompt.'
+        ),
+        model: z.string().optional().describe(
+          'VLM model override (e.g., "Qwen/Qwen3-VL-8B-Instruct"). Defaults to XBERG_VLM_OCR_MODEL env var.'
+        ),
+      }),
+    },
+    handleDescribeImage,
+  );
 }
 
 /**
@@ -181,6 +214,28 @@ async function handleExtractStructured(args) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logInfo(`extract_structured error ${msg}`);
+    return { content: [{ type: 'text', text: `Error: ${msg}` }], isError: true };
+  }
+}
+
+/**
+ * Handler for describe_image.
+ * Thin wrapper — delegates to describeImage().
+ */
+async function handleDescribeImage(args) {
+  try {
+    logInfo(`describe_image invoked data=${truncateBase64(args.data)} prompt=${args.prompt ? 'custom' : 'default'} model=${args.model ?? 'default'}`);
+
+    const result = await describeImage(args);
+
+    if (!result.ok) {
+      return { content: [{ type: 'text', text: result.error }], isError: true };
+    }
+
+    return { content: [{ type: 'text', text: JSON.stringify(result.body) }] };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logInfo(`describe_image error ${msg}`);
     return { content: [{ type: 'text', text: `Error: ${msg}` }], isError: true };
   }
 }

@@ -44,6 +44,12 @@ describe('tools.js registration', () => {
     registerTools(server);
     assert.ok(server.tools.has(TOOLS.EXTRACT_STRUCTURED), 'extract_structured must be registered');
   });
+
+  it('registers describe_image', () => {
+    const server = createMockMcpServer();
+    registerTools(server);
+    assert.ok(server.tools.has(TOOLS.DESCRIBE_IMAGE), 'describe_image must be registered');
+  });
 });
 
 describe('tools.js extract_bytes schema', () => {
@@ -446,6 +452,92 @@ describe('tools.js handleExtractBytes ocr_engine error surfacing', () => {
       });
       assert.equal(result.isError, true, 'unconfigured vlm must surface as an MCP error result');
       assert.match(result.content[0].text, /ocr_engine 'vlm' requires XBERG_VLM_OCR_MODEL/);
+    } finally {
+      config.vlmOcrModel = saved;
+    }
+  });
+});
+
+describe('tools.js describe_image input schema', () => {
+  const definition = registerAndGetDefinition(TOOLS.DESCRIBE_IMAGE);
+  const shape = definition.inputSchema.shape;
+
+  it('data is required', () => {
+    assert.equal(shape.data.isOptional(), false, 'data must be required');
+  });
+
+  it('prompt is optional', () => {
+    assert.equal(shape.prompt.isOptional(), true, 'prompt must be optional');
+  });
+
+  it('model is optional', () => {
+    assert.equal(shape.model.isOptional(), true, 'model must be optional');
+  });
+});
+
+describe('tools.js describe_image handler', () => {
+  function registerHandler() {
+    const server = createMockMcpServer();
+    registerTools(server);
+    const definition = server.tools.get(TOOLS.DESCRIBE_IMAGE);
+    assert.ok(definition.handler, 'describe_image handler must be captured');
+    return definition.handler;
+  }
+
+  const TINY_B64 = Buffer.from('hello').toString('base64');
+
+  it('returns description for valid image', async (t) => {
+    const saved = config.vlmOcrModel;
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+
+    try {
+      const stubBody = { results: [{ content: 'A cat on a mat' }], summary: { results: 1 } };
+      let seenForm;
+      t.mock.method(globalThis, 'fetch', async (_url, init) => {
+        seenForm = init.body;
+        return new Response(JSON.stringify(stubBody), { status: 200 });
+      });
+
+      const handler = registerHandler();
+      const result = await handler({ data: TINY_B64 });
+
+      assert.equal(result.isError, undefined, 'handler must succeed');
+      const returned = JSON.parse(result.content[0].text);
+      assert.deepEqual(returned, stubBody);
+    } finally {
+      config.vlmOcrModel = saved;
+    }
+  });
+
+  it('returns isError result when xberg returns non-200', async (t) => {
+    const saved = config.vlmOcrModel;
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+
+    try {
+      t.mock.method(globalThis, 'fetch', async () => {
+        return new Response('vlm timeout', { status: 504 });
+      });
+
+      const handler = registerHandler();
+      const result = await handler({ data: TINY_B64 });
+
+      assert.equal(result.isError, true, 'non-200 must surface as MCP error');
+      assert.match(result.content[0].text, /Xberg error \(504\): vlm timeout/);
+    } finally {
+      config.vlmOcrModel = saved;
+    }
+  });
+
+  it('returns isError result when client throws', async (t) => {
+    const saved = config.vlmOcrModel;
+    config.vlmOcrModel = null;
+
+    try {
+      const handler = registerHandler();
+      const result = await handler({ data: TINY_B64 });
+
+      assert.equal(result.isError, true, 'thrown error must be caught and returned');
+      assert.match(result.content[0].text, /VLM model not configured/);
     } finally {
       config.vlmOcrModel = saved;
     }
