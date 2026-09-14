@@ -91,26 +91,23 @@ export async function describeImage(args) {
     }
   }
 
-  const vlmConfig = { model: args.model || config.vlmOcrModel };
+  const captioningConfig = {
+    llm: {
+      model: args.model || config.vlmOcrModel,
+    },
+    prompt: args.prompt || DEFAULT_DESCRIBE_PROMPT,
+    min_image_area: 0,
+  };
   if (config.structuredBaseUrl !== null) {
-    vlmConfig.base_url = String(config.structuredBaseUrl);
+    captioningConfig.llm.base_url = String(config.structuredBaseUrl);
   }
   if (config.structuredApiKey !== null) {
-    vlmConfig.api_key = String(config.structuredApiKey);
+    captioningConfig.llm.api_key = String(config.structuredApiKey);
   }
 
   const extractConfig = {
-    ocr: {
-      backend: 'vlm',
-      vlm_fallback: { mode: 'disabled' },
-      vlm_config: vlmConfig,
-    },
+    captioning: captioningConfig,
   };
-  if (args.prompt) {
-    extractConfig.ocr.vlm_config.prompt = args.prompt;
-  } else {
-    extractConfig.ocr.vlm_config.prompt = DEFAULT_DESCRIBE_PROMPT;
-  }
 
   const formData = new FormData();
   formData.append('files', new File([buffer], 'file', { type: 'application/octet-stream' }));

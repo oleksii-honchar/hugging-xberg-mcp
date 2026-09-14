@@ -402,7 +402,7 @@ describe('describeImage outbound request', () => {
     for (const k of KEYS) saved[k] = config[k];
   };
 
-  it('sends correct VLM OCR config to /extract', async () => {
+  it('sends correct captioning config to /extract', async () => {
     saveConfig();
     config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
     mock = mockFetch(okResponse);
@@ -417,8 +417,9 @@ describe('describeImage outbound request', () => {
     assert.ok(body instanceof FormData);
 
     const configJson = JSON.parse(body.get('config'));
-    assert.equal(configJson.ocr.backend, 'vlm');
-    assert.equal(configJson.ocr.vlm_fallback.mode, 'disabled');
+    assert.ok(configJson.captioning, 'config must carry captioning block');
+    assert.equal(configJson.captioning.min_image_area, 0, 'min_image_area must be 0 for standalone images');
+    assert.equal(configJson.captioning.llm.model, 'puma-qwen3.5-2b-instruct');
   });
 
   it('uses default prompt when none provided', async () => {
@@ -430,7 +431,7 @@ describe('describeImage outbound request', () => {
     await describeImage({ data });
 
     const configJson = JSON.parse(mock.calls[0].body.get('config'));
-    assert.match(configJson.ocr.vlm_config.prompt, /Describe this image in detail/);
+    assert.match(configJson.captioning.prompt, /Describe this image in detail/);
   });
 
   it('uses custom prompt when provided', async () => {
@@ -443,7 +444,7 @@ describe('describeImage outbound request', () => {
     await describeImage({ data, prompt: customPrompt });
 
     const configJson = JSON.parse(mock.calls[0].body.get('config'));
-    assert.equal(configJson.ocr.vlm_config.prompt, customPrompt);
+    assert.equal(configJson.captioning.prompt, customPrompt);
   });
 
   it('uses default model when none provided', async () => {
@@ -455,7 +456,7 @@ describe('describeImage outbound request', () => {
     await describeImage({ data });
 
     const configJson = JSON.parse(mock.calls[0].body.get('config'));
-    assert.equal(configJson.ocr.vlm_config.model, config.vlmOcrModel);
+    assert.equal(configJson.captioning.llm.model, config.vlmOcrModel);
   });
 
   it('uses model override when provided', async () => {
@@ -466,7 +467,7 @@ describe('describeImage outbound request', () => {
     await describeImage({ data, model: customModel });
 
     const configJson = JSON.parse(mock.calls[0].body.get('config'));
-    assert.equal(configJson.ocr.vlm_config.model, customModel);
+    assert.equal(configJson.captioning.llm.model, customModel);
   });
 
   it('handles successful response', async () => {

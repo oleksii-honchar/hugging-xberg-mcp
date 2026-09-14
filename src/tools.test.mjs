@@ -491,7 +491,7 @@ describe('tools.js describe_image handler', () => {
     config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
 
     try {
-      const stubBody = { results: [{ content: 'A cat on a mat' }], summary: { results: 1 } };
+      const stubBody = { results: [{ images: [{ caption: 'A cat on a mat' }] }], summary: { results: 1 } };
       let seenForm;
       t.mock.method(globalThis, 'fetch', async (_url, init) => {
         seenForm = init.body;
