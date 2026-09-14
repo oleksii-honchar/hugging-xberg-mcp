@@ -4,10 +4,10 @@ title: "hugging-xberg-mcp — Module Architecture (src/)"
 c4_level: component
 system: hugging-xberg-mcp
 createdAt: "2026-08-21T10:59:18Z"
-updatedAt: "2026-09-05T10:19:00Z"
+updatedAt: "2026-09-14T06:33:00Z"
 tags: [mcp, architecture, modules, c4, ocr]
-see_also: ["architectures/hugging-xberg-mcp/containers/0001-system-container.container.md", "decisions/0001-raise-body-limit.decision.md", "decisions/0002-preserve-status-codes.decision.md", "decisions/0003-align-client-guard.decision.md", "decisions/0004-structured-extraction-via-config.decision.md", "concepts/0001-mcp-streamable-http-stateless.concept.md", "decisions/0007-ocr-engine-knob-request-level-config.decision.md", "specifications/0002-cpu-first-ocr-vlm-fallback.spec.md"]
-linked_elements: ["config-js", "logger-js", "xberg-client-js", "tools-js", "mcp-server-mjs", "xberg-api"]
+see_also: ["architectures/hugging-xberg-mcp/containers/0001-system-container.container.md", "decisions/0001-raise-body-limit.decision.md", "decisions/0002-preserve-status-codes.decision.md", "decisions/0003-align-client-guard.decision.md", "decisions/0004-structured-extraction-via-config.decision.md", "concepts/0001-mcp-streamable-http-stateless.concept.md", "decisions/0007-ocr-engine-knob-request-level-config.decision.md", "specifications/0002-cpu-first-ocr-vlm-fallback.spec.md", "decisions/0011-describe-image-capturing-redesign.decision.md"]
+linked_elements: ["config-js", "logger-js", "xberg-client-js", "tools-js", "mcp-server-mjs", "xberg-api", "describe_image"]
 deprecated:
   date: null
   reason: null
@@ -84,6 +84,7 @@ Encapsulates all HTTP calls to the Xberg REST API. Returns Result-like objects: 
    - `buildOcrConfig(ocrEngine)` — composes the complete per-request `ocr` block (engines + `vlm_fallback` + VLM model from `XBERG_VLM_OCR_MODEL`) based on the `ocr_engine` knob (2.2.0+)
    - `buildStructuredConfig()` — builds the `config.structured_extraction` JSON from server-side env vars
   - `extractStructured(data)` — POST `/extract` with `config.structured_extraction` (schema + LLM config from env vars); the old `/extract-structured` endpoint no longer exists (DEC-0004)
+   - `describeImage(args)` — POST `/extract` with `captioning` config (model, prompt, `min_image_area: 0`); returns full xberg JSON response including `results[0].images[].caption` (DEC-0011)
 - **Data URL support:** both tools accept raw base64 or full data URLs; `extractBase64()` converts transparently
 - **Input size limit:** `MAX_BASE64_LENGTH = 48_900_000` chars (~36.5MB raw) — larger payloads rejected with a clear error before any HTTP call (DEC-0003)
 
@@ -92,9 +93,10 @@ Encapsulates all HTTP calls to the Xberg REST API. Returns Result-like objects: 
 Thin handlers that validate input (zod), log invocation, delegate to xberg-client, and format the response. Business logic lives in xberg-client.js.
 
 - **Exports:** `registerTools(mcpServer)` — registers both tools on the given McpServer instance
- - **Tool signatures:**
-   - `extract_bytes({ data, mime_type?, config?, response_format?, ocr_engine? })`
-   - `extract_structured({ data, ocr_engine? })`
+  - **Tool signatures:**
+    - `extract_bytes({ data, mime_type?, config?, response_format?, ocr_engine? })`
+    - `extract_structured({ data, ocr_engine? })`
+    - `describe_image({ data, prompt?, model? })` — VLM-powered image description via xberg captioning (2.4.0+)
  - **`ocr_engine` (2.2.0+):** when set, `buildOcrConfig()` composes a complete `ocr` block sent as top-level `ocr` in the `/extract` body — Xberg **replaces** (not merges) the per-request config ([[memories/0010-xberg-request-config-replace-not-merge.memory]])
 - **`extract_bytes` `response_format` enum:** `['json','toon','plain','markdown','djot','html']` — `'toon'` maps to the multipart `format=toon` field; `'json'` omits the format field (default Xberg JSON envelope); `'plain'|'markdown'|'djot'|'html'` map to `output_format=<value>` content rendering
 

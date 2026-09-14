@@ -2,7 +2,7 @@
 type: index
 title: "Architecture Decision Records"
 createdAt: "2026-08-09T10:59:55Z"
-updatedAt: "2026-09-05T10:19:00Z"
+updatedAt: "2026-09-14T06:33:00Z"
 tags: []
 ---
 
@@ -24,3 +24,4 @@ Architecture decisions that shaped the hugging-xberg MCP server.
 - [[0008-wrapper-extract-env-pattern.decision]] — DEC-0008: Wrapper sources explicit-VLM block from existing env pattern
 - [[0009-xberg-toml-ocr-ssot.decision]] — DEC-0009: xberg.toml single source of truth for OCR VLM model; remove env overrides
 - [[0010-additive-wrapper-evolution.decision]] — DEC-0010: Additive wrapper evolution only — 2.1.0 → 2.2.0, upstream xberg pin honored
+- [[0011-describe-image-capturing-redesign.decision]] — DEC-0011: describe_image uses xberg captioning pipeline, not VLM OCR

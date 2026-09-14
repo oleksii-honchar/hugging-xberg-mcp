@@ -232,10 +232,31 @@ async function handleDescribeImage(args) {
       return { content: [{ type: 'text', text: result.error }], isError: true };
     }
 
-    return { content: [{ type: 'text', text: JSON.stringify(result.body) }] };
+    return { content: [{ type: 'text', text: extractCaptions(result.body) }] };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logInfo(`describe_image error ${msg}`);
     return { content: [{ type: 'text', text: `Error: ${msg}` }], isError: true };
   }
+}
+
+/**
+ * Extract the natural-language image caption(s) from an xberg /extract
+ * captioning response. The captioning feature returns results[].images[].caption;
+ * here they are joined into a single text block.
+ *
+ * Falls back to the raw envelope JSON when the captioning shape is absent
+ * (e.g. an unexpected server response) so the user still sees the payload.
+ */
+function extractCaptions(body) {
+  const images = body?.results?.[0]?.images;
+  if (Array.isArray(images)) {
+    const captions = images
+      .map((img) => img?.caption)
+      .filter((caption) => typeof caption === 'string' && caption.length > 0);
+    if (captions.length > 0) {
+      return captions.join('\n\n');
+    }
+  }
+  return JSON.stringify(body);
 }

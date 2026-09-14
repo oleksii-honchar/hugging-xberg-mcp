@@ -486,7 +486,7 @@ describe('tools.js describe_image handler', () => {
 
   const TINY_B64 = Buffer.from('hello').toString('base64');
 
-  it('returns description for valid image', async (t) => {
+it('returns description for valid image', async (t) => {
     const saved = config.vlmOcrModel;
     config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
 
@@ -502,14 +502,36 @@ describe('tools.js describe_image handler', () => {
       const result = await handler({ data: TINY_B64 });
 
       assert.equal(result.isError, undefined, 'handler must succeed');
-      const returned = JSON.parse(result.content[0].text);
-      assert.deepEqual(returned, stubBody);
+      assert.equal(result.content[0].text, 'A cat on a mat', 'handler must return the caption text, not the raw envelope');
     } finally {
       config.vlmOcrModel = saved;
     }
   });
 
-  it('returns isError result when xberg returns non-200', async (t) => {
+  it('returns description from the captioning config (captioning block sent, not ocr)', async (t) => {
+    const saved = config.vlmOcrModel;
+    config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
+
+    try {
+      let seenForm;
+      t.mock.method(globalThis, 'fetch', async (_url, init) => {
+        seenForm = init.body;
+        return new Response(JSON.stringify({ results: [{ images: [{ caption: 'x' }] }] }), { status: 200 });
+      });
+
+      const handler = registerHandler();
+      await handler({ data: TINY_B64 });
+
+      const configJson = JSON.parse(seenForm.get('config'));
+      assert.ok(configJson.captioning, 'config must carry a captioning block');
+      assert.ok(!('ocr' in configJson), 'config must NOT carry an ocr block');
+      assert.equal(configJson.captioning.min_image_area, 0, 'min_image_area must be 0');
+    } finally {
+      config.vlmOcrModel = saved;
+    }
+  });
+
+      it('returns isError result when xberg returns non-200', async (t) => {
     const saved = config.vlmOcrModel;
     config.vlmOcrModel = 'puma-qwen3.5-2b-instruct';
 
